@@ -80,7 +80,3 @@ Relationships enforce:
 - Two skiers per team
 - One team per skier per season
 - Race conflict detection
-
-```bash
-git clone https://github.com/your-repo/cs440-ski-project.git
-cd cs440-ski-pr

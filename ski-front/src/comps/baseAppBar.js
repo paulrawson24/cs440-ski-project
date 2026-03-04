@@ -25,6 +25,8 @@ export default function ButtonAppBar() {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Ski Tracker
           </Typography>
+          <Button onClick={() => navigate("/")} color="inherit">Home</Button>
+          <Button onClick={() => navigate("/admin_dashboard")} color="inherit">Admin Dashboard</Button>
           <Button onClick={() => navigate("/login")} color="inherit">Login</Button>
         </Toolbar>
       </AppBar>

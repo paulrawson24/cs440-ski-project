@@ -61,7 +61,7 @@ export default function Register() {
           </FormControl>
         </div>
 
-        <button type="submit" style={{ marginTop: "15px" }}>
+        <button onClick={handleSubmit} type="submit" style={{ marginTop: "15px" }}>
           Register
         </button>
 

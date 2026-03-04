@@ -1,14 +1,19 @@
-import './App.css';
-import ButtonAppBar from './comps/baseAppBar';
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import ButtonAppBar from "./comps/baseAppBar";
+import Login from "./comps/login";
 
-function App() {
-
-  return (
-    <div className="App">
-      <ButtonAppBar></ButtonAppBar>
-      
-    </div>
-  );
+function Home() {
+  return <div style={{ padding: 40, fontSize: 30 }}>HOME ✅</div>;
 }
 
-export default App;
+export default function App() {
+  return (
+    <BrowserRouter>
+      <ButtonAppBar />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}

@@ -10,6 +10,7 @@ export default function Register() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [role, setRole] = React.useState("");
+  const [error, setError] = React.useState("");
 
   const handleBack = (e) => {
     e.preventDefault();
@@ -18,7 +19,8 @@ export default function Register() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("Hit submit");
+    setError("");
+
     const data = {
       firstName,
       lastName,
@@ -28,7 +30,7 @@ export default function Register() {
     };
 
     try {
-      const response = await fetch("http://localhost:3000/register", {
+      const response = await fetch("http://localhost:4000/api/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -37,12 +39,15 @@ export default function Register() {
       });
 
       const result = await response.json();
-      console.log(result);
+      if (!response.ok) {
+        setError(result.error || "Register failed");
+        return;
+      }
 
       navigate("/login");
 
     } catch (error) {
-      console.error("Error:", error);
+      setError("Server connection failed");
     }
   };
 
@@ -96,14 +101,14 @@ export default function Register() {
               label="Role"
               onChange={(e) => setRole(e.target.value)}
             >
-              <MenuItem value="Skier">Skier</MenuItem>
-              <MenuItem value="Coach">Coach</MenuItem>
-              <MenuItem value="League Admin">League Admin</MenuItem>
+              <MenuItem value="skier">Skier</MenuItem>
+              <MenuItem value="coach">Coach</MenuItem>
+              <MenuItem value="admin">League Admin</MenuItem>
             </Select>
           </FormControl>
         </div>
 
-        <button onClick={handleSubmit} type="submit" style={{ marginTop: "15px" }}>
+        <button type="submit" style={{ marginTop: "15px" }}>
           Register
         </button>
 
@@ -111,6 +116,7 @@ export default function Register() {
           Back
         </button>
       </form>
+      {error && <p style={{ color: "red" }}>{error}</p>}
     </div>
   );
 }

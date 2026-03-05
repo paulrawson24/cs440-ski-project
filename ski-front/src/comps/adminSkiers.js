@@ -44,6 +44,11 @@ export default function AdminSkiers() {
     loadData();
   }
 
+  function getTeamNameById(id) {
+    const team = teams.find((t) => t.team_id === id);
+    return team ? team.team_name : "None";
+  }
+
   return (
     <div style={{ padding: "40px" }}>
       <h1>Manage Skiers</h1>
@@ -82,7 +87,7 @@ export default function AdminSkiers() {
       <ul>
         {skiers.map((skier) => (
           <li key={skier.user_id}>
-            {skier.first_name} {skier.last_name} - Team ID: {skier.team_id || "None"}
+            {skier.first_name} {skier.last_name} - Team: {getTeamNameById(skier.team_id)}
           </li>
         ))}
       </ul>

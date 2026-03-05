@@ -6,6 +6,7 @@ import AdminDashboard from "./comps/adminDashboard";
 import AdminCoaches from "./comps/adminCoaches";
 import AdminSkiers from "./comps/adminSkiers";
 import AdminEvents from "./comps/adminEvents";
+import SkierDashboard from "./comps/skierDashboard";
 
 function Home() {
   return <div style={{ padding: 40, fontSize: 30 }}>HOME</div>;
@@ -15,9 +16,6 @@ function CoachDashboard() {
   return <div style={{ padding: 40, fontSize: 30 }}>COACH DASHBOARD</div>;
 }
 
-function SkierDashboard() {
-  return <div style={{ padding: 40, fontSize: 30 }}>SKIER DASHBOARD</div>;
-}
 
 export default function App() {
   return (

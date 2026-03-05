@@ -26,6 +26,8 @@ export default function Login() {
 
       const user = await response.json();
 
+      localStorage.setItem("user", JSON.stringify(user));
+
       if (user.role === "admin") navigate("/admin");
       else if (user.role === "coach") navigate("/coach");
       else if (user.role === "skier") navigate("/skier");

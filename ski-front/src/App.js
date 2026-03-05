@@ -7,13 +7,11 @@ import AdminCoaches from "./comps/adminCoaches";
 import AdminSkiers from "./comps/adminSkiers";
 import AdminEvents from "./comps/adminEvents";
 import SkierDashboard from "./comps/skierDashboard";
+import CoachDashboard from "./comps/coachDashboard";
+
 
 function Home() {
   return <div style={{ padding: 40, fontSize: 30 }}>HOME</div>;
-}
-
-function CoachDashboard() {
-  return <div style={{ padding: 40, fontSize: 30 }}>COACH DASHBOARD</div>;
 }
 
 

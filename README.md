@@ -55,8 +55,8 @@ The system supports three user roles:
 ## Tech Used
 
 - React
-- Python or Java
-- MySQL
+- JavaScript
+- SQL
 
 - VS Code
 - MySQL Workbench

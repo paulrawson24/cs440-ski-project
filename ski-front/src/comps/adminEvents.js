@@ -2,6 +2,30 @@ import React, { useEffect, useState } from "react";
 
 const API_BASE = "http://localhost:4000/api/admin";
 
+function formatTime(timeStr) {
+  if (!timeStr) return "";
+  const d = new Date(`1970-01-01T${timeStr}`);
+  return d
+    .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
+function formatDateWithDot(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d)) return "";
+  const month = d.toLocaleString("en-US", { month: "short" }); // "Feb"
+  const day = d.getDate();
+  const year = d.getFullYear();
+  return `${month}. ${day}, ${year}`;
+}
+
+function timeStringToMinutes(timeStr) {
+  if (!timeStr) return NaN;
+  const [h, m] = timeStr.split(":").map(Number);
+  return Number.isNaN(h) || Number.isNaN(m) ? NaN : h * 60 + m;
+}
+
 export default function AdminEvents() {
   const [teamName, setTeamName] = useState("");
   const [courseName, setCourseName] = useState("");
@@ -70,6 +94,68 @@ export default function AdminEvents() {
   async function handleCreateRace(event) {
     event.preventDefault();
     setMessage("");
+
+    if (!raceDate || !team1Id || !team2Id || !startTime || !endTime) {
+      setMessage("Failed to create race");
+      return;
+    }
+
+    const raceDay = new Date(raceDate);
+    if (Number.isNaN(raceDay.getTime())) {
+      setMessage("Failed to create race");
+      return;
+    }
+
+    const month = raceDay.getMonth() + 1; // 1-based month
+    const year = raceDay.getFullYear();
+    if (year !== 2026 || month < 2 || month > 5) {
+      setMessage("Failed to create race");
+      return;
+    }
+
+    const startMinutes = timeStringToMinutes(startTime);
+    const endMinutes = timeStringToMinutes(endTime);
+    if (
+      Number.isNaN(startMinutes) ||
+      Number.isNaN(endMinutes) ||
+      startMinutes >= endMinutes
+    ) {
+      setMessage("Failed to create race");
+      return;
+    }
+
+    const newTeam1 = Number(team1Id);
+    const newTeam2 = Number(team2Id);
+
+    const conflict = races.some((race) => {
+      if (race.race_date !== raceDate) return false;
+
+      const existingStart = timeStringToMinutes(race.start_time);
+      const existingEnd = timeStringToMinutes(race.end_time);
+      if (
+        Number.isNaN(existingStart) ||
+        Number.isNaN(existingEnd) ||
+        existingStart >= existingEnd
+      ) {
+        return false;
+      }
+
+      const timeOverlap =
+        startMinutes < existingEnd && endMinutes > existingStart;
+      const teamConflict =
+        race.team1_id === newTeam1 ||
+        race.team2_id === newTeam1 ||
+        race.team1_id === newTeam2 ||
+        race.team2_id === newTeam2;
+
+      return timeOverlap && teamConflict;
+    });
+
+    if (conflict) {
+      setMessage("Failed to create race");
+      return;
+    }
+
     const response = await fetch(`${API_BASE}/races`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -79,8 +165,8 @@ export default function AdminEvents() {
         start_time: startTime,
         end_time: endTime,
         course_id: Number(courseId),
-        team1_id: Number(team1Id),
-        team2_id: Number(team2Id),
+        team1_id: newTeam1,
+        team2_id: newTeam2,
       }),
     });
     if (!response.ok) {
@@ -194,11 +280,22 @@ export default function AdminEvents() {
 
       <h2>Races</h2>
       <ul>
-        {races.map((race) => (
-          <li key={race.race_id}>
-            {race.race_name} ({race.race_date}) {race.team1_name} vs {race.team2_name}
-          </li>
-        ))}
+        {races.map((race, index) => {
+          const start = formatTime(race.start_time);
+          const end = formatTime(race.end_time);
+          const formattedDate = formatDateWithDot(race.race_date);
+          const course = race.course_name || "Unknown course";
+          const raceTitle =
+            race.team1_name && race.team2_name
+              ? `${race.team1_name} V ${race.team2_name}`
+              : race.race_name || "Unknown race";
+
+          return (
+            <li key={race.race_id}>
+              Race {index + 1}: {raceTitle} from {start} to {end} on {formattedDate} at {course}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

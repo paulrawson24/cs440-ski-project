@@ -58,6 +58,7 @@ router.get("/courses", async (req, res) => {
   }
 });
 
+// POST /api/admin/races - Create a new race with conflict validation
 router.post("/races", async (req, res) => {
   const { race_name, race_date, start_time, end_time, course_id, team1_id, team2_id } = req.body;
   if (!race_name || !race_date || !start_time || !end_time || !course_id || !team1_id || !team2_id) {
@@ -65,6 +66,32 @@ router.post("/races", async (req, res) => {
   }
 
   try {
+    // Check if either team already has a race scheduled at the same time/date
+    const [teamConflicts] = await pool.query(
+      `SELECT race_id FROM races 
+       WHERE race_date = ? 
+       AND ((team1_id = ? OR team2_id = ?) OR (team1_id = ? OR team2_id = ?))
+       AND NOT (end_time <= ? OR start_time >= ?)`,
+      [race_date, team1_id, team1_id, team2_id, team2_id, start_time, end_time]
+    );
+
+    if (teamConflicts.length > 0) {
+      return res.status(400).json({ ok: false, error: "Failed to create race" });
+    }
+
+    // Check if the course already has a race scheduled at the same time/date
+    const [courseConflicts] = await pool.query(
+      `SELECT race_id FROM races 
+       WHERE course_id = ? 
+       AND race_date = ? 
+       AND NOT (end_time <= ? OR start_time >= ?)`,
+      [course_id, race_date, start_time, end_time]
+    );
+
+    if (courseConflicts.length > 0) {
+      return res.status(400).json({ ok: false, error: "Failed to create race" });
+    }
+
     const [result] = await pool.query(
       `INSERT INTO races (race_name, race_date, start_time, end_time, course_id, team1_id, team2_id)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,

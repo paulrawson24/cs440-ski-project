@@ -1,7 +1,9 @@
+// Teams API routes - handles team-related operations
 const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 
+// GET /api/teams - Retrieve all teams
 router.get("/", async (_req, res) => {
   try {
     const [rows] = await pool.query(

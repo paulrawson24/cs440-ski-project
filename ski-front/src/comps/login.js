@@ -1,6 +1,6 @@
+// Login component for user authentication
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-
 
 export default function Login() {
   const navigate = useNavigate();
@@ -8,11 +8,13 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
+  // Handle form submission for user login
   async function handleSubmit(event) {
     event.preventDefault();
     setError("");
 
     try {
+      // Send login credentials to backend API
       const response = await fetch("http://localhost:4000/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -26,8 +28,10 @@ export default function Login() {
 
       const user = await response.json();
 
+      // Store user data in localStorage for session persistence
       localStorage.setItem("user", JSON.stringify(user));
 
+      // Redirect user to appropriate dashboard based on their role
       if (user.role === "admin") navigate("/admin");
       else if (user.role === "coach") navigate("/coach");
       else if (user.role === "skier") navigate("/skier");

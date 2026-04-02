@@ -1,3 +1,4 @@
+// User registration component
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { FormControl, InputLabel, Select, MenuItem } from "@mui/material";
@@ -12,11 +13,13 @@ export default function Register() {
   const [role, setRole] = React.useState("");
   const [error, setError] = React.useState("");
 
+  // Navigate back to login page
   const handleBack = (e) => {
     e.preventDefault();
     navigate("/login");
   };
 
+  // Handle form submission for user registration
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -30,6 +33,7 @@ export default function Register() {
     };
 
     try {
+      // Send registration data to backend API
       const response = await fetch("http://localhost:4000/api/register", {
         method: "POST",
         headers: {
@@ -44,6 +48,7 @@ export default function Register() {
         return;
       }
 
+      // Redirect to login page after successful registration
       navigate("/login");
 
     } catch (error) {

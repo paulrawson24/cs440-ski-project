@@ -1,3 +1,4 @@
+// Skier dashboard component - displays skier information, team, and upcoming races
 import { List, ListItem } from "@mui/material";
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -9,8 +10,8 @@ export default function SkierDashboard() {
   const [error, setError] = useState("");
   const [racesList, setRacesList] = useState([]);
 
-
   useEffect(() => {
+    // Load user data from localStorage on component mount
     const stored = localStorage.getItem("user");
 
     if (!stored) {
@@ -23,21 +24,22 @@ export default function SkierDashboard() {
       if (!parsed?.user_id) throw new Error("Missing user id");
       setUser(parsed);
 
-      // Fetch teams and map team_id to team_name
+      // Fetch team information if skier is assigned to a team
       if (parsed.team_id) {
         fetch("http://localhost:4000/api/teams")
           .then((res) => (res.ok ? res.json() : Promise.reject()))
           .then((teams) => {
-            //console.log("teams", teams)
+            // Find the skier's team by team_id
             const team = teams.find((t) => t.team_id === parsed.team_id);
             if (team) setTeamName(team.team_name);
           })
           .catch(() => setError("Unable to load teams"));
 
-        // Fetch races and map team_id to team?_id from races
+        // Fetch all races and filter for skier's team
         fetch("http://localhost:4000/api/races")
           .then((res) => (res.ok ? res.json() : Promise.reject()))
           .then((races) => {
+            // Find all races where the skier's team is participating
             const matchingRaces = races.filter(
               (r) => r.team1_id === parsed.team_id || r.team2_id === parsed.team_id
             );
@@ -46,12 +48,13 @@ export default function SkierDashboard() {
           .catch(() => setError("Unable to load races"));
       }
     } catch (err) {
-      // If stored data is bad, force re-login
+      // If stored data is corrupted, clear it and redirect to login
       localStorage.removeItem("user");
       navigate("/login");
     }
   }, [navigate]);
 
+  // Don't render until user data is loaded
   if (!user) {
     return null;
   }
@@ -64,6 +67,7 @@ export default function SkierDashboard() {
       </p>
       <p>Team: {teamName || user.team_name || user.team_id || "Not assigned yet"}</p>
       <p>Upcoming races:</p>
+      {/* Display list of races for the skier's team */}
       <List>
         {racesList.length === 0 ? (
           <ListItem disabled>No races scheduled for your team yet</ListItem>

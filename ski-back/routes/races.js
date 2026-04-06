@@ -5,7 +5,7 @@ const pool = require("../db");
 router.get("/", async (_req, res) => {
   try {
     const [rows] = await pool.query(
-      "SELECT race_id, race_name, race_date, start_time, end_time, course_id, team1_id, team2_id FROM races"
+      "SELECT race_id, race_name, race_date, start_time, end_time, course_id, team1_id, team2_id, status FROM races"
     );
     res.json(rows);
   } catch (err) {

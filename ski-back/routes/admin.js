@@ -70,6 +70,7 @@ router.post("/races", async (req, res) => {
     const [teamConflicts] = await pool.query(
       `SELECT race_id FROM races 
        WHERE race_date = ? 
+       AND status <> 'canceled'
        AND ((team1_id = ? OR team2_id = ?) OR (team1_id = ? OR team2_id = ?))
        AND NOT (end_time <= ? OR start_time >= ?)`,
       [race_date, team1_id, team1_id, team2_id, team2_id, start_time, end_time]
@@ -84,6 +85,7 @@ router.post("/races", async (req, res) => {
       `SELECT race_id FROM races 
        WHERE course_id = ? 
        AND race_date = ? 
+       AND status <> 'canceled'
        AND NOT (end_time <= ? OR start_time >= ?)`,
       [course_id, race_date, start_time, end_time]
     );
@@ -107,7 +109,7 @@ router.get("/races", async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT r.race_id, r.race_name, r.race_date, r.start_time, r.end_time,
-              r.course_id, c.course_name, r.team1_id, t1.team_name AS team1_name,
+              r.course_id, r.status, c.course_name, r.team1_id, t1.team_name AS team1_name,
               r.team2_id, t2.team_name AS team2_name
        FROM races r
        JOIN courses c ON c.course_id = r.course_id
@@ -129,7 +131,7 @@ router.get("/races/:raceId/results", async (req, res) => {
 
   try {
     const [[race]] = await pool.query(
-      `SELECT r.race_id, r.race_name, r.team1_id, r.team2_id,
+      `SELECT r.race_id, r.race_name, r.team1_id, r.team2_id, r.status,
               t1.team_name AS team1_name, t2.team_name AS team2_name
        FROM races r
        JOIN teams t1 ON t1.team_id = r.team1_id
@@ -156,6 +158,30 @@ router.get("/races/:raceId/results", async (req, res) => {
     return res.json({ ok: true, race, skiers });
   } catch (err) {
     return res.status(500).json({ ok: false, error: "Could not load race results" });
+  }
+});
+
+router.put("/races/:raceId/cancel", async (req, res) => {
+  const raceId = Number(req.params.raceId);
+  if (!raceId) {
+    return res.status(400).json({ ok: false, error: "Valid raceId is required" });
+  }
+
+  try {
+    const [result] = await pool.query(
+      `UPDATE races
+       SET status = 'canceled'
+       WHERE race_id = ? AND status <> 'canceled'`,
+      [raceId]
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ ok: false, error: "Race not found or already canceled" });
+    }
+
+    return res.json({ ok: true, message: "Race canceled" });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "Could not cancel race" });
   }
 });
 

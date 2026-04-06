@@ -8,6 +8,7 @@ export default function CoachDashboard() {
   const [teamName, setTeamName] = useState("");
   const [error, setError] = useState("");
   const [race, setRace] = useState("");
+  const [teamResults, setTeamResults] = useState([]);
 
   useEffect(() => {
     // Load user data from localStorage on component mount
@@ -47,6 +48,11 @@ export default function CoachDashboard() {
           })
           .catch(() => setError("Unable to load races"));
       }
+
+      fetch(`http://localhost:4000/api/coach/${parsed.user_id}/team-results`)
+        .then((res) => (res.ok ? res.json() : Promise.reject()))
+        .then((data) => setTeamResults(data.results || []))
+        .catch(() => setError("Unable to load team results"));
     } catch (err) {
       // If stored data is corrupted, clear it and redirect to login
       localStorage.removeItem("user");
@@ -69,6 +75,19 @@ export default function CoachDashboard() {
         Team: {teamName || user.team_name || user.team_id || "Not assigned yet"}
       </p>
       <p>Race 1: {race}</p>
+      <p>Team results:</p>
+      <ul>
+        {teamResults.length === 0 ? (
+          <li>No results posted yet</li>
+        ) : (
+          teamResults.map((row, index) => (
+            <li key={`${row.user_id}-${row.race_id || index}`}>
+              {row.first_name} {row.last_name}
+              {row.race_name ? ` - ${row.race_name}: ${row.time_seconds}s` : " - No results yet"}
+            </li>
+          ))
+        )}
+      </ul>
 
       {error && <p style={{ color: "red" }}>{error}</p>}
     </div>

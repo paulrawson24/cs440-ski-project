@@ -9,6 +9,7 @@ export default function SkierDashboard() {
   const [teamName, setTeamName] = useState("");
   const [error, setError] = useState("");
   const [racesList, setRacesList] = useState([]);
+  const [results, setResults] = useState([]);
 
   useEffect(() => {
     // Load user data from localStorage on component mount
@@ -47,6 +48,11 @@ export default function SkierDashboard() {
           })
           .catch(() => setError("Unable to load races"));
       }
+
+      fetch(`http://localhost:4000/api/skier/${parsed.user_id}/results`)
+        .then((res) => (res.ok ? res.json() : Promise.reject()))
+        .then((data) => setResults(data.results || []))
+        .catch(() => setError("Unable to load race results"));
     } catch (err) {
       // If stored data is corrupted, clear it and redirect to login
       localStorage.removeItem("user");
@@ -74,6 +80,18 @@ export default function SkierDashboard() {
         ) : (
           racesList.map((race) => (
             <ListItem key={race.race_id}>{race.race_name} {race.start_time}-{race.end_time} {race.race_date}</ListItem>
+          ))
+        )}
+      </List>
+      <p>My race results:</p>
+      <List>
+        {results.length === 0 ? (
+          <ListItem disabled>No results posted yet</ListItem>
+        ) : (
+          results.map((result, index) => (
+            <ListItem key={`${result.race_id}-${index}`}>
+              {result.race_name} {result.race_date} - {result.time_seconds}s
+            </ListItem>
           ))
         )}
       </List>

@@ -47,6 +47,10 @@ export default function AdminEvents() {
   const [courses, setCourses] = useState([]);
   const [races, setRaces] = useState([]);
   const [message, setMessage] = useState("");
+  const [selectedRaceId, setSelectedRaceId] = useState("");
+  const [resultsRaceData, setResultsRaceData] = useState(null);
+  const [resultsForm, setResultsForm] = useState({});
+  const [resultsMessage, setResultsMessage] = useState("");
 
   // Load all teams, courses, and races data from API
   async function loadData() {
@@ -64,6 +68,72 @@ export default function AdminEvents() {
   useEffect(() => {
     loadData();
   }, []);
+
+  async function handleLoadResults(raceId) {
+    setResultsMessage("");
+    setSelectedRaceId(raceId);
+
+    const response = await fetch(`${API_BASE}/races/${raceId}/results`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      setResultsRaceData(null);
+      setResultsForm({});
+      setResultsMessage(data.error || "Failed to load race results");
+      return;
+    }
+
+    setResultsRaceData(data);
+
+    const initialForm = {};
+    data.skiers.forEach((skier) => {
+      initialForm[skier.user_id] = skier.time_seconds ?? "";
+    });
+    setResultsForm(initialForm);
+  }
+
+  function handleResultChange(userId, value) {
+    setResultsForm((current) => ({
+      ...current,
+      [userId]: value,
+    }));
+  }
+
+  async function handleSaveResults(event) {
+    event.preventDefault();
+    setResultsMessage("");
+
+    if (!selectedRaceId || !resultsRaceData) {
+      setResultsMessage("Select a race first");
+      return;
+    }
+
+    const results = resultsRaceData.skiers.map((skier) => ({
+      user_id: skier.user_id,
+      time_seconds: Number(resultsForm[skier.user_id]),
+    }));
+
+    if (results.some((item) => !Number.isInteger(item.time_seconds) || item.time_seconds <= 0)) {
+      setResultsMessage("Each skier must have a positive whole-number time");
+      return;
+    }
+
+    const response = await fetch(`${API_BASE}/races/${selectedRaceId}/results`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ results }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      setResultsMessage(data.error || "Failed to save race results");
+      return;
+    }
+
+    setResultsMessage("Race results saved");
+    handleLoadResults(selectedRaceId);
+  }
 
   async function handleCreateTeam(event) {
     event.preventDefault();
@@ -311,10 +381,65 @@ export default function AdminEvents() {
           return (
             <li key={race.race_id}>
               {race.race_name}: {raceTitle} from {start} to {end} on {formattedDate} at {course}
+              <button
+                type="button"
+                style={{ marginLeft: "10px" }}
+                onClick={() => handleLoadResults(race.race_id)}
+              >
+                Enter Results
+              </button>
             </li>
           );
         })}
       </ul>
+
+      {resultsRaceData && (
+        <div style={{ marginTop: "30px" }}>
+          <h2>Enter Results</h2>
+          <p>
+            {resultsRaceData.race.race_name}: {resultsRaceData.race.team1_name} vs{" "}
+            {resultsRaceData.race.team2_name}
+          </p>
+
+          <form onSubmit={handleSaveResults}>
+            {[
+              {
+                teamId: resultsRaceData.race.team1_id,
+                teamName: resultsRaceData.race.team1_name,
+              },
+              {
+                teamId: resultsRaceData.race.team2_id,
+                teamName: resultsRaceData.race.team2_name,
+              },
+            ].map((team) => (
+              <div key={team.teamId} style={{ marginBottom: "20px" }}>
+                <h3>{team.teamName}</h3>
+                {resultsRaceData.skiers
+                  .filter((skier) => skier.team_id === team.teamId)
+                  .map((skier) => (
+                    <div key={skier.user_id} style={{ marginBottom: "10px" }}>
+                      <label>
+                        {skier.first_name} {skier.last_name} Time (seconds)
+                      </label>
+                      <br />
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={resultsForm[skier.user_id] ?? ""}
+                        onChange={(e) => handleResultChange(skier.user_id, e.target.value)}
+                      />
+                    </div>
+                  ))}
+              </div>
+            ))}
+
+            <button type="submit">Save Results</button>
+          </form>
+
+          {resultsMessage && <p>{resultsMessage}</p>}
+        </div>
+      )}
     </div>
   );
 }

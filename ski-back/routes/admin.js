@@ -121,6 +121,102 @@ router.get("/races", async (req, res) => {
   }
 });
 
+router.get("/races/:raceId/results", async (req, res) => {
+  const raceId = Number(req.params.raceId);
+  if (!raceId) {
+    return res.status(400).json({ ok: false, error: "Valid raceId is required" });
+  }
+
+  try {
+    const [[race]] = await pool.query(
+      `SELECT r.race_id, r.race_name, r.team1_id, r.team2_id,
+              t1.team_name AS team1_name, t2.team_name AS team2_name
+       FROM races r
+       JOIN teams t1 ON t1.team_id = r.team1_id
+       JOIN teams t2 ON t2.team_id = r.team2_id
+       WHERE r.race_id = ?`,
+      [raceId]
+    );
+
+    if (!race) {
+      return res.status(404).json({ ok: false, error: "Race not found" });
+    }
+
+    const [skiers] = await pool.query(
+      `SELECT u.user_id, u.first_name, u.last_name, u.team_id, rr.time_seconds
+       FROM users u
+       LEFT JOIN race_results rr
+         ON rr.user_id = u.user_id AND rr.race_id = ?
+       WHERE u.role = 'skier'
+         AND (u.team_id = ? OR u.team_id = ?)
+       ORDER BY u.team_id, u.last_name, u.first_name`,
+      [raceId, race.team1_id, race.team2_id]
+    );
+
+    return res.json({ ok: true, race, skiers });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "Could not load race results" });
+  }
+});
+
+router.post("/races/:raceId/results", async (req, res) => {
+  const raceId = Number(req.params.raceId);
+  const { results } = req.body;
+
+  if (!raceId || !Array.isArray(results) || results.length === 0) {
+    return res.status(400).json({ ok: false, error: "Valid raceId and results are required" });
+  }
+
+  try {
+    const [[race]] = await pool.query(
+      `SELECT race_id, team1_id, team2_id
+       FROM races
+       WHERE race_id = ?`,
+      [raceId]
+    );
+
+    if (!race) {
+      return res.status(404).json({ ok: false, error: "Race not found" });
+    }
+
+    const [allowedSkiers] = await pool.query(
+      `SELECT user_id
+       FROM users
+       WHERE role = 'skier'
+         AND (team_id = ? OR team_id = ?)`,
+      [race.team1_id, race.team2_id]
+    );
+
+    const allowedIds = new Set(allowedSkiers.map((row) => row.user_id));
+
+    for (const item of results) {
+      const userId = Number(item.user_id);
+      const timeSeconds = Number(item.time_seconds);
+
+      if (!allowedIds.has(userId)) {
+        return res.status(400).json({ ok: false, error: "Invalid skier for this race" });
+      }
+
+      if (!Number.isInteger(timeSeconds) || timeSeconds <= 0) {
+        return res.status(400).json({ ok: false, error: "Times must be positive whole numbers" });
+      }
+    }
+
+    for (const item of results) {
+      await pool.query(
+        `INSERT INTO race_results (race_id, user_id, time_seconds)
+         VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE time_seconds = VALUES(time_seconds)`,
+        [raceId, Number(item.user_id), Number(item.time_seconds)]
+      );
+    }
+
+    return res.json({ ok: true, message: "Race results saved" });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "Could not save race results" });
+  }
+});
+
 router.get("/coaches", async (req, res) => {
   try {
     const [rows] = await pool.query(

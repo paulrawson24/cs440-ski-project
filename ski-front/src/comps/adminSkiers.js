@@ -1,3 +1,4 @@
+// Admin component for managing skier assignments to teams
 import React, { useEffect, useState } from "react";
 
 const API_BASE = "http://localhost:4000/api/admin";
@@ -9,6 +10,7 @@ export default function AdminSkiers() {
   const [skierId, setSkierId] = useState("");
   const [message, setMessage] = useState("");
 
+  // Load teams and skiers data from API
   async function loadData() {
     const [teamsRes, skiersRes] = await Promise.all([
       fetch(`${API_BASE}/teams`),
@@ -23,6 +25,7 @@ export default function AdminSkiers() {
     loadData();
   }, []);
 
+  // Handle skier assignment to team
   async function handleAssign(event) {
     event.preventDefault();
     setMessage("");
@@ -44,6 +47,7 @@ export default function AdminSkiers() {
     loadData();
   }
 
+  // Helper function to get team name by team ID
   function getTeamNameById(id) {
     const team = teams.find((t) => t.team_id === id);
     return team ? team.team_name : "None";

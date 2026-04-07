@@ -1,7 +1,9 @@
+// Admin component for managing ski league events (teams, courses, and races)
 import React, { useEffect, useState } from "react";
 
 const API_BASE = "http://localhost:4000/api/admin";
 
+// Helper function to format time strings for display (e.g., "2:30 PM")
 function formatTime(timeStr) {
   if (!timeStr) return "";
   const d = new Date(`1970-01-01T${timeStr}`);
@@ -11,6 +13,7 @@ function formatTime(timeStr) {
     .replace(/\s+/g, "");
 }
 
+// Helper function to format dates with dots (e.g., "Feb. 15, 2026")
 function formatDateWithDot(dateStr) {
   const d = new Date(dateStr);
   if (isNaN(d)) return "";
@@ -20,6 +23,7 @@ function formatDateWithDot(dateStr) {
   return `${month}. ${day}, ${year}`;
 }
 
+// Helper function to convert time string to minutes for comparison
 function timeStringToMinutes(timeStr) {
   if (!timeStr) return NaN;
   const [h, m] = timeStr.split(":").map(Number);
@@ -27,6 +31,7 @@ function timeStringToMinutes(timeStr) {
 }
 
 export default function AdminEvents() {
+  // Form state for creating new entities
   const [teamName, setTeamName] = useState("");
   const [courseName, setCourseName] = useState("");
   const [raceName, setRaceName] = useState("");
@@ -36,11 +41,14 @@ export default function AdminEvents() {
   const [courseId, setCourseId] = useState("");
   const [team1Id, setTeam1Id] = useState("");
   const [team2Id, setTeam2Id] = useState("");
+
+  // Data state for displaying existing entities
   const [teams, setTeams] = useState([]);
   const [courses, setCourses] = useState([]);
   const [races, setRaces] = useState([]);
   const [message, setMessage] = useState("");
 
+  // Load all teams, courses, and races data from API
   async function loadData() {
     const [teamsRes, coursesRes, racesRes] = await Promise.all([
       fetch(`${API_BASE}/teams`),
@@ -91,10 +99,12 @@ export default function AdminEvents() {
     loadData();
   }
 
+  // Handle race creation with validation for scheduling conflicts
   async function handleCreateRace(event) {
     event.preventDefault();
     setMessage("");
 
+    // Basic validation - ensure all required fields are filled
     if (!raceDate || !team1Id || !team2Id || !startTime || !endTime) {
       setMessage("Failed to create race");
       return;
@@ -126,6 +136,7 @@ export default function AdminEvents() {
 
     const newTeam1 = Number(team1Id);
     const newTeam2 = Number(team2Id);
+    const newCourseId = Number(courseId);
 
     const conflict = races.some((race) => {
       if (race.race_date !== raceDate) return false;
@@ -142,13 +153,19 @@ export default function AdminEvents() {
 
       const timeOverlap =
         startMinutes < existingEnd && endMinutes > existingStart;
+      
+      // Check if either team is already scheduled for another race at this time
       const teamConflict =
         race.team1_id === newTeam1 ||
         race.team2_id === newTeam1 ||
         race.team1_id === newTeam2 ||
         race.team2_id === newTeam2;
 
-      return timeOverlap && teamConflict;
+      // Check if the course already has a race scheduled at this time
+      const courseConflict = race.course_id === newCourseId;
+
+      // Conflict exists if there's time overlap AND either team or course conflict
+      return timeOverlap && (teamConflict || courseConflict);
     });
 
     if (conflict) {
@@ -292,7 +309,7 @@ export default function AdminEvents() {
 
           return (
             <li key={race.race_id}>
-              Race {index + 1}: {raceTitle} from {start} to {end} on {formattedDate} at {course}
+              {race.race_name}: {raceTitle} from {start} to {end} on {formattedDate} at {course}
             </li>
           );
         })}

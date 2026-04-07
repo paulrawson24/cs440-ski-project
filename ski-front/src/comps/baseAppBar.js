@@ -1,3 +1,4 @@
+// Main navigation bar component using Material-UI
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Toolbar from '@mui/material/Toolbar';
@@ -13,6 +14,7 @@ export default function ButtonAppBar() {
     <Box sx={{ flexGrow: 1, width: "100%"}}>
       <AppBar position="static">
         <Toolbar>
+          {/* Menu icon button (currently non-functional) */}
           <IconButton
             size="large"
             edge="start"
@@ -22,9 +24,11 @@ export default function ButtonAppBar() {
           >
             <MenuIcon />
           </IconButton>
+          {/* Application title */}
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             Ski Tracker
           </Typography>
+          {/* Navigation buttons */}
           <Button onClick={() => navigate("/")} color="inherit">Home</Button>
           <Button onClick={() => navigate("/admin_dashboard")} color="inherit">Admin Dashboard</Button>
           <Button onClick={() => navigate("/login")} color="inherit">Login</Button>

@@ -1,3 +1,4 @@
+// Admin component for managing coach assignments to teams
 import React, { useEffect, useState } from "react";
 
 const API_BASE = "http://localhost:4000/api/admin";
@@ -9,6 +10,7 @@ export default function AdminCoaches() {
   const [coachId, setCoachId] = useState("");
   const [message, setMessage] = useState("");
 
+  // Load teams and coaches data from API
   async function loadData() {
     const [teamsRes, coachesRes] = await Promise.all([
       fetch(`${API_BASE}/teams`),
@@ -23,6 +25,7 @@ export default function AdminCoaches() {
     loadData();
   }, []);
 
+  // Handle coach assignment to team
   async function handleAssign(event) {
     event.preventDefault();
     setMessage("");

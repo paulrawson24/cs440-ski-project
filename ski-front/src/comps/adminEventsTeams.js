@@ -1,60 +1,41 @@
-// Admin component for managing coach assignments to teams
+// Admin component for managing teams
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const API_BASE = "http://localhost:4000/api/admin";
 
-export default function AdminCoaches() {
+export default function AdminEventsTeams() {
   const navigate = useNavigate();
+  const [teamName, setTeamName] = useState("");
   const [teams, setTeams] = useState([]);
-  const [coaches, setCoaches] = useState([]);
-  const [teamId, setTeamId] = useState("");
-  const [coachId, setCoachId] = useState("");
   const [message, setMessage] = useState("");
 
-  // Load teams and coaches data from API
+  // Load teams data from API
   async function loadData() {
-    const [teamsRes, coachesRes] = await Promise.all([
-      fetch(`${API_BASE}/teams`),
-      fetch(`${API_BASE}/coaches`),
-    ]);
-
+    const teamsRes = await fetch(`${API_BASE}/teams`);
     if (teamsRes.ok) setTeams(await teamsRes.json());
-    if (coachesRes.ok) setCoaches(await coachesRes.json());
   }
 
   useEffect(() => {
     loadData();
   }, []);
 
-  // Handle coach assignment to team
-  async function handleAssign(event) {
+  // Handle team creation
+  async function handleCreateTeam(event) {
     event.preventDefault();
     setMessage("");
-
-    const response = await fetch(`${API_BASE}/teams/${teamId}/coach`, {
-      method: "PUT",
+    const response = await fetch(`${API_BASE}/teams`, {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ coach_id: Number(coachId) }),
+      body: JSON.stringify({ team_name: teamName }),
     });
-
-    const data = await response.json();
     if (!response.ok) {
-      setMessage(data?.error || "Failed to assign coach");
+      setMessage("Failed to create team");
       return;
     }
-
-    setMessage("Coach assigned");
-    setCoachId("");
-    setTeamId("");
+    setTeamName("");
+    setMessage("Team created");
     loadData();
-  }
-
-  // Helper function to get team name assigned to a coach
-  function getTeamNameForCoach(coach) {
-    if (!coach?.team_id) return "None";
-    const team = teams.find((t) => t.team_id === Number(coach.team_id));
-    return team ? team.team_name : "None";
   }
 
   return (
@@ -85,13 +66,15 @@ export default function AdminCoaches() {
         }}
       >
         <h1 style={{ margin: 0, marginBottom: "24px", fontWeight: "700" }}>
-          Manage Coaches
+          Create Team
         </h1>
 
-        <form onSubmit={handleAssign} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-          <select
-            value={teamId}
-            onChange={(e) => setTeamId(e.target.value)}
+        <form onSubmit={handleCreateTeam} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+          <input
+            type="text"
+            placeholder="Enter team name"
+            value={teamName}
+            onChange={(e) => setTeamName(e.target.value)}
             style={{
               width: "100%",
               padding: "14px 12px",
@@ -99,33 +82,7 @@ export default function AdminCoaches() {
               border: "1px solid #ccc",
               fontSize: "16px",
             }}
-          >
-            <option value="">Select team</option>
-            {teams.map((team) => (
-              <option key={team.team_id} value={team.team_id}>
-                {team.team_name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={coachId}
-            onChange={(e) => setCoachId(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "14px 12px",
-              borderRadius: "10px",
-              border: "1px solid #ccc",
-              fontSize: "16px",
-            }}
-          >
-            <option value="">Select coach</option>
-            {coaches.map((coach) => (
-              <option key={coach.user_id} value={coach.user_id}>
-                {coach.first_name} {coach.last_name}
-              </option>
-            ))}
-          </select>
+          />
 
           <button
             type="submit"
@@ -140,7 +97,7 @@ export default function AdminCoaches() {
               cursor: "pointer",
             }}
           >
-            Assign Coach
+            Create Team
           </button>
         </form>
 
@@ -151,21 +108,15 @@ export default function AdminCoaches() {
             <thead>
               <tr>
                 <th style={{ textAlign: "center", padding: "12px 8px", borderBottom: "2px solid #e0e0e0" }}>
-                  Coach
-                </th>
-                <th style={{ textAlign: "center", padding: "12px 8px", borderBottom: "2px solid #e0e0e0" }}>
                   Team
                 </th>
               </tr>
             </thead>
             <tbody>
-              {coaches.map((coach) => (
-                <tr key={coach.user_id}>
+              {teams.map((team) => (
+                <tr key={team.team_id}>
                   <td style={{ textAlign: "center", padding: "12px 8px", borderBottom: "1px solid #eee" }}>
-                    {coach.first_name} {coach.last_name}
-                  </td>
-                  <td style={{ textAlign: "center", padding: "12px 8px", borderBottom: "1px solid #eee" }}>
-                    {getTeamNameForCoach(coach)}
+                    {team.team_name}
                   </td>
                 </tr>
               ))}
@@ -174,11 +125,9 @@ export default function AdminCoaches() {
         </div>
 
         <button
-          onClick={() => navigate("/admin")}
+          onClick={() => navigate("/admin/events")}
           style={{
             marginTop: "20px",
-            paddingLeft: 0,
-            paddingRight: 0,
             alignSelf: "flex-start",
             backgroundColor: "#1976d2",
             color: "white",

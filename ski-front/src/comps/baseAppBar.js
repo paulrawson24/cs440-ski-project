@@ -1,37 +1,60 @@
 // Main navigation bar component using Material-UI
+import React, { useState } from 'react';
 import AppBar from '@mui/material/AppBar';
 import Box from '@mui/material/Box';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
-import Button from '@mui/material/Button';
 import IconButton from '@mui/material/IconButton';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
 import MenuIcon from '@mui/icons-material/Menu';
 import { useNavigate } from "react-router-dom";
 
 export default function ButtonAppBar() {
   const navigate = useNavigate();
+  const [anchorEl, setAnchorEl] = useState(null);
+
+  const handleMenuOpen = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleNavigate = (path) => {
+    handleMenuClose();
+    navigate(path);
+  };
+
   return (
-    <Box sx={{ flexGrow: 1, width: "100%"}}>
+    <Box sx={{ flexGrow: 1, width: "100%" }}>
       <AppBar position="static">
         <Toolbar>
-          {/* Menu icon button (currently non-functional) */}
           <IconButton
             size="large"
             edge="start"
             color="inherit"
             aria-label="menu"
+            onClick={handleMenuOpen}
             sx={{ mr: 2 }}
           >
             <MenuIcon />
           </IconButton>
-          {/* Application title */}
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-            Ski Tracker
+          <Menu
+            anchorEl={anchorEl}
+            open={Boolean(anchorEl)}
+            onClose={handleMenuClose}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            <MenuItem onClick={() => handleNavigate('/')}>Home</MenuItem>
+            <MenuItem onClick={() => handleNavigate('/login')}>Login</MenuItem>
+          </Menu>
+
+          <Typography variant="h6" component="div" sx={{ flexGrow: 1, textAlign: 'center' }}>
+            Ski League Management System
           </Typography>
-          {/* Navigation buttons */}
-          <Button onClick={() => navigate("/")} color="inherit">Home</Button>
-          <Button onClick={() => navigate("/admin_dashboard")} color="inherit">Admin Dashboard</Button>
-          <Button onClick={() => navigate("/login")} color="inherit">Login</Button>
         </Toolbar>
       </AppBar>
     </Box>

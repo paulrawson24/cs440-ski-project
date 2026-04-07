@@ -42,9 +42,10 @@ export default function CoachDashboard() {
             // Find races where the coach's team is participating
             const matchingRace = races.find(
               (r) =>
-                r.team1_id === parsed.team_id || r.team2_id === parsed.team_id,
+                r.status !== "canceled" &&
+                (r.team1_id === parsed.team_id || r.team2_id === parsed.team_id),
             );
-            setRace(matchingRace.race_name);
+            setRace(matchingRace ? matchingRace.race_name : "");
           })
           .catch(() => setError("Unable to load races"));
       }

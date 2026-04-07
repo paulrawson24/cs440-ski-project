@@ -42,7 +42,9 @@ export default function SkierDashboard() {
           .then((races) => {
             // Find all races where the skier's team is participating
             const matchingRaces = races.filter(
-              (r) => r.team1_id === parsed.team_id || r.team2_id === parsed.team_id
+              (r) =>
+                r.status !== "canceled" &&
+                (r.team1_id === parsed.team_id || r.team2_id === parsed.team_id)
             );
             setRacesList(matchingRaces);
           })

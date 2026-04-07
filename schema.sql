@@ -42,6 +42,7 @@ CREATE TABLE races (
     course_id INT NOT NULL,
     team1_id INT NOT NULL,
     team2_id INT NOT NULL,
+    status ENUM('scheduled', 'canceled') NOT NULL DEFAULT 'scheduled',
     FOREIGN KEY (course_id) REFERENCES courses(course_id)
         ON DELETE CASCADE,
     FOREIGN KEY (team1_id) REFERENCES teams(team_id)

@@ -135,6 +135,31 @@ export default function AdminEvents() {
     handleLoadResults(selectedRaceId);
   }
 
+  async function handleCancelRace(raceId) {
+    setMessage("");
+    setResultsMessage("");
+
+    const response = await fetch(`${API_BASE}/races/${raceId}/cancel`, {
+      method: "PUT",
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setMessage(data.error || "Failed to cancel race");
+      return;
+    }
+
+    if (selectedRaceId === raceId && resultsRaceData) {
+      setResultsRaceData({
+        ...resultsRaceData,
+        race: { ...resultsRaceData.race, status: "canceled" },
+      });
+    }
+
+    setMessage("Race canceled");
+    loadData();
+  }
+
   async function handleCreateTeam(event) {
     event.preventDefault();
     setMessage("");
@@ -381,12 +406,28 @@ export default function AdminEvents() {
           return (
             <li key={race.race_id}>
               {race.race_name}: {raceTitle} from {start} to {end} on {formattedDate} at {course}
+              <span
+                style={{
+                  marginLeft: "8px",
+                  color: race.status === "canceled" ? "red" : "green",
+                }}
+              >
+                {race.status === "canceled" ? "Canceled" : "Scheduled"}
+              </span>
               <button
                 type="button"
                 style={{ marginLeft: "10px" }}
                 onClick={() => handleLoadResults(race.race_id)}
               >
                 Enter Results
+              </button>
+              <button
+                type="button"
+                style={{ marginLeft: "10px" }}
+                onClick={() => handleCancelRace(race.race_id)}
+                disabled={race.status === "canceled"}
+              >
+                {race.status === "canceled" ? "Canceled" : "Cancel Race"}
               </button>
             </li>
           );
@@ -399,6 +440,7 @@ export default function AdminEvents() {
           <p>
             {resultsRaceData.race.race_name}: {resultsRaceData.race.team1_name} vs{" "}
             {resultsRaceData.race.team2_name}
+            {resultsRaceData.race.status ? ` (${resultsRaceData.race.status})` : ""}
           </p>
 
           <form onSubmit={handleSaveResults}>

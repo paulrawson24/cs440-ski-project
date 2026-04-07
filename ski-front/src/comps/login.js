@@ -1,6 +1,6 @@
 // Login component for user authentication
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -42,41 +42,89 @@ export default function Login() {
   }
 
   return (
-    <div style={{ padding: "40px" }}>
-      <h1>Login</h1>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundImage:
+          "url('https://external-preview.redd.it/skiing-4k-wallpaper-3840-x-2160-v0-8KzeDceg2UZLClcu8nCYzf9c_owu7w6JDNJeG3Mpwx8.jpg?auto=webp&s=02c8b08086b9f7f48ab9bb711790160b4c6f3ff2')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        padding: "20px",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "420px",
+          backgroundColor: "rgba(255, 255, 255, 0.92)",
+          borderRadius: "16px",
+          boxShadow: "0 12px 28px rgba(0, 0, 0, 0.24)",
+          padding: "32px",
+          textAlign: "center",
+        }}
+      >
+        <h1 style={{ margin: 0, marginBottom: "24px", fontWeight: "700" }}>
+          Login
+        </h1>
 
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label>Email</label>
-          <br/>
+        <form onSubmit={handleSubmit}>
           <input
             type="text"
+            placeholder="Enter your email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "14px 12px",
+              marginBottom: "16px",
+              borderRadius: "10px",
+              border: "1px solid #ccc",
+              fontSize: "16px",
+            }}
           />
-        </div>
-
-        <div style={{ marginTop: "10px" }}>
-          <label>Password</label>
-          <br/>
           <input
             type="password"
+            placeholder="Enter your password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "14px 12px",
+              marginBottom: "24px",
+              borderRadius: "10px",
+              border: "1px solid #ccc",
+              fontSize: "16px",
+            }}
           />
-        </div>
+          <button
+            type="submit"
+            style={{
+              width: "100%",
+              padding: "14px 12px",
+              borderRadius: "10px",
+              border: "none",
+              backgroundColor: "#1976d2",
+              color: "white",
+              fontSize: "16px",
+              cursor: "pointer",
+            }}
+          >
+            Login
+          </button>
+        </form>
 
-        <button type="submit" style={{ marginTop: "15px" }}>
-          Login
-        </button>
+        <p style={{ marginTop: "22px", fontSize: "14px", color: "#555" }}>
+          Don't have an account?{' '}
+          <Link to="/register" style={{ color: "#1976d2", textDecoration: "none", fontWeight: "600" }}>
+            Register
+          </Link>
+        </p>
 
-        <button type="button" onClick={() => navigate("/register")} style={{ marginLeft: "32px"}}>
-          Register
-        </button>
-
-      </form>
-      {error && <p style={{ color: "red" }}>{error}</p>}
-
+        {error && <p style={{ color: "red", marginTop: "8px" }}>{error}</p>}
+      </div>
     </div>
   );
 }

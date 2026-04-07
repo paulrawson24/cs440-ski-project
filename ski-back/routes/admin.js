@@ -151,14 +151,49 @@ router.get("/skiers", async (req, res) => {
 
 router.put("/teams/:teamId/coach", async (req, res) => {
   const teamId = Number(req.params.teamId);
-  const { coach_id } = req.body;
-  if (!teamId || !coach_id) {
+  const coachId = Number(req.body.coach_id);
+  if (!teamId || !coachId) {
     return res.status(400).json({ ok: false, error: "teamId and coach_id are required" });
   }
 
   try {
-    await pool.query("UPDATE teams SET coach_id = ? WHERE team_id = ?", [coach_id, teamId]);
-    await pool.query("UPDATE users SET team_id = ? WHERE user_id = ? AND role = 'coach'", [teamId, coach_id]);
+    const [teamRows] = await pool.query(
+      "SELECT coach_id FROM teams WHERE team_id = ?",
+      [teamId]
+    );
+    if (teamRows.length === 0) {
+      return res.status(404).json({ ok: false, error: "Team not found" });
+    }
+
+    const [coachRows] = await pool.query(
+      "SELECT team_id FROM users WHERE user_id = ? AND role = 'coach'",
+      [coachId]
+    );
+    if (coachRows.length === 0) {
+      return res.status(404).json({ ok: false, error: "Coach not found" });
+    }
+
+    const existingCoachId = teamRows[0].coach_id;
+    const existingTeamId = coachRows[0].team_id;
+
+    const [assignedCoachRows] = await pool.query(
+      "SELECT user_id FROM users WHERE role = 'coach' AND team_id = ? AND user_id != ?",
+      [teamId, coachId]
+    );
+    if (assignedCoachRows.length > 0) {
+      return res.status(400).json({ ok: false, error: "can not assign coach" });
+    }
+
+    if (existingCoachId && Number(existingCoachId) !== coachId) {
+      return res.status(400).json({ ok: false, error: "can not assign coach" });
+    }
+
+    if (existingTeamId && Number(existingTeamId) !== teamId) {
+      return res.status(400).json({ ok: false, error: "can not assign coach" });
+    }
+
+    await pool.query("UPDATE teams SET coach_id = ? WHERE team_id = ?", [coachId, teamId]);
+    await pool.query("UPDATE users SET team_id = ? WHERE user_id = ? AND role = 'coach'", [teamId, coachId]);
     return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ ok: false, error: "Could not assign coach" });

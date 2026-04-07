@@ -2,15 +2,33 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+function formatTime(timeStr) {
+  if (!timeStr) return "";
+  const d = new Date(`1970-01-01T${timeStr}`);
+  return d
+    .toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
+    .toLowerCase()
+    .replace(/\s+/g, "");
+}
+
+function formatDateWithDot(dateStr) {
+  const d = new Date(dateStr);
+  if (isNaN(d)) return "";
+  const month = d.toLocaleString("en-US", { month: "short" });
+  const day = d.getDate();
+  const year = d.getFullYear();
+  return `${month}. ${day}, ${year}`;
+}
+
 export default function CoachDashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [teamName, setTeamName] = useState("");
+  const [members, setMembers] = useState([]);
+  const [races, setRaces] = useState([]);
   const [error, setError] = useState("");
-  const [race, setRace] = useState("");
 
   useEffect(() => {
-    // Load user data from localStorage on component mount
     const stored = localStorage.getItem("user");
 
     if (!stored) {
@@ -23,54 +41,146 @@ export default function CoachDashboard() {
       if (!parsed?.user_id) throw new Error("Missing user id");
       setUser(parsed);
 
-      // Fetch team information if coach is assigned to a team
       if (parsed.team_id) {
-        fetch("http://localhost:4000/api/teams")
-          .then((res) => (res.ok ? res.json() : Promise.reject()))
-          .then((teams) => {
-            // Find the coach's team by team_id
-            const team = teams.find((t) => t.team_id === parsed.team_id);
-            if (team) setTeamName(team.team_name);
-          })
-          .catch(() => setError("Unable to load teams"));
+        const coachTeamId = Number(parsed.team_id);
 
-        // Fetch race information for the coach's team
-        fetch("http://localhost:4000/api/races")
-          .then((res) => (res.ok ? res.json() : Promise.reject()))
-          .then((races) => {
-            // Find races where the coach's team is participating
-            const matchingRace = races.find(
-              (r) =>
-                r.team1_id === parsed.team_id || r.team2_id === parsed.team_id,
+        Promise.all([
+          fetch("http://localhost:4000/api/teams"),
+          fetch("http://localhost:4000/api/admin/skiers"),
+          fetch("http://localhost:4000/api/admin/races"),
+        ])
+          .then(async ([teamsRes, skiersRes, racesRes]) => {
+            if (!teamsRes.ok || !skiersRes.ok || !racesRes.ok) {
+              throw new Error("Unable to load data");
+            }
+            const [teamsData, skiersData, racesData] = await Promise.all([
+              teamsRes.json(),
+              skiersRes.json(),
+              racesRes.json(),
+            ]);
+
+            const team = teamsData.find((t) => t.team_id === coachTeamId);
+            if (team) setTeamName(team.team_name);
+
+            setMembers(
+              skiersData.filter((skier) => Number(skier.team_id) === coachTeamId),
             );
-            setRace(matchingRace.race_name);
+
+            setRaces(
+              racesData.filter(
+                (race) =>
+                  Number(race.team1_id) === coachTeamId ||
+                  Number(race.team2_id) === coachTeamId,
+              ),
+            );
+            setError("");
           })
-          .catch(() => setError("Unable to load races"));
+          .catch(() => setError("Unable to load team details"));
       }
     } catch (err) {
-      // If stored data is corrupted, clear it and redirect to login
       localStorage.removeItem("user");
       navigate("/login");
     }
   }, [navigate]);
 
-  // Don't render until user data is loaded
   if (!user) {
     return null;
   }
 
   return (
-    <div style={{ padding: "40px" }}>
-      <h1>Coach Dashboard</h1>
-      <p>
-        Welcome, Coach {user.first_name} {user.last_name}
-      </p>
-      <p>
-        Team: {teamName || user.team_name || user.team_id || "Not assigned yet"}
-      </p>
-      <p>Race 1: {race}</p>
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundImage:
+          "url('https://m.media-amazon.com/images/I/91wAgsBZz+L.jpg')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        padding: "20px",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "540px",
+          backgroundColor: "rgba(255, 255, 255, 0.92)",
+          borderRadius: "16px",
+          boxShadow: "0 12px 28px rgba(0, 0, 0, 0.24)",
+          padding: "32px",
+          textAlign: "left",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <h1 style={{ margin: 0, marginBottom: "24px", fontWeight: "700" }}>
+          Coach Dashboard
+        </h1>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+        <p style={{ margin: 0, marginBottom: "24px", color: "#555" }}>
+          Welcome, Coach {user.first_name} {user.last_name}
+        </p>
+
+        <div style={{ marginBottom: "24px" }}>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: "18px" }}>Team</p>
+          <p style={{ marginTop: "8px", color: "#333" }}>
+            {teamName || user.team_name || "Not assigned yet"}
+          </p>
+        </div>
+
+        <div style={{ marginBottom: "24px" }}>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: "18px" }}>Members</p>
+          {members.length === 0 ? (
+            <p style={{ marginTop: "8px", color: "#555" }}>No team members found.</p>
+          ) : (
+            <ul style={{ marginTop: "12px", paddingLeft: "18px", color: "#333" }}>
+              {members.map((skier) => (
+                <li key={skier.user_id} style={{ marginBottom: "8px" }}>
+                  {skier.first_name} {skier.last_name}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div style={{ marginBottom: "12px" }}>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: "18px" }}>
+            Upcoming races
+          </p>
+          {races.length === 0 ? (
+            <p style={{ marginTop: "8px", color: "#555" }}>
+              No upcoming races scheduled for your team.
+            </p>
+          ) : (
+            <ul style={{ marginTop: "12px", paddingLeft: "20px", color: "#333" }}>
+              {races.map((race) => {
+                const start = formatTime(race.start_time);
+                const end = formatTime(race.end_time);
+                const formattedDate = formatDateWithDot(race.race_date);
+                const course = race.course_name || "Unknown course";
+                const raceTitle =
+                  race.team1_name && race.team2_name
+                    ? `${race.team1_name} V ${race.team2_name}`
+                    : `${race.team1_id || "Team 1"} V ${race.team2_id || "Team 2"}`;
+
+                return (
+                  <li
+                    key={race.race_id}
+                    style={{
+                      marginBottom: "12px",
+                    }}
+                  >
+                    {race.race_name}: {raceTitle} from {start} to {end} on {formattedDate} at {course}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        {error && <p style={{ color: "red", marginTop: "8px" }}>{error}</p>}
+      </div>
     </div>
   );
 }

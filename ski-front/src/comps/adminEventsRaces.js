@@ -527,7 +527,6 @@ const isFormValid = createRaceError === "";
               color: isFormValid ? "white" : "#343434",
               fontSize: "16px",
               cursor: "pointer",
-              pointerEvents: "none",
             }}
           >
             Create Race

@@ -652,7 +652,39 @@ router.put("/teams/:teamId/skier", async (req, res) => {
   }
 
   try {
-    await pool.query("UPDATE users SET team_id = ? WHERE user_id = ? AND role = 'skier'", [teamId, skier_id]);
+    // Ensure the skier exists and is a skier    
+    const [[skier]] = await pool.query(
+      "SELECT user_id, team_id FROM users WHERE user_id = ? AND role = 'skier'",
+      [skier_id]
+    );
+
+    if (!skier) {
+      return res.status(404).json({ ok: false, error: "Skier not found" });
+    }
+
+    // Prevent moving a skier already assigned to a different team
+    if (skier.team_id && Number(skier.team_id) !== teamId) {
+      return res.status(400).json({ ok: false, error: "Skier already assigned to another team" });
+    }
+
+    // Enforce maximum of 2 skiers per team
+    const [[countRow]] = await pool.query(
+      "SELECT COUNT(*) AS count FROM users WHERE role = 'skier' AND team_id = ?",
+      [teamId]
+    );
+
+    const skierCount = Number(countRow.count || 0);
+
+    // Allow update if skier already on this team, otherwise require space
+    const alreadyOnTeam = skier.team_id && Number(skier.team_id) === teamId;
+    if (!alreadyOnTeam && skierCount >= 2) {
+      return res.status(400).json({ ok: false, error: "Team already has 2 skiers" });
+    }
+
+    await pool.query(
+      "UPDATE users SET team_id = ? WHERE user_id = ? AND role = 'skier'",
+      [teamId, skier_id]
+    );
     return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ ok: false, error: "Could not assign skier" });

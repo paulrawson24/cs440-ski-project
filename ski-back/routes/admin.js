@@ -2,6 +2,11 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 
+function parseRaceDateTime(dateStr, timeStr) {
+  const value = new Date(`${dateStr}T${timeStr}`);
+  return Number.isNaN(value.getTime()) ? null : value;
+}
+
 router.get("/", (req, res) => {
   res.json({ ok: true, area: "admin" });
 });
@@ -85,6 +90,32 @@ router.post("/races", async (req, res) => {
   }
 
   try {
+    const raceStart = parseRaceDateTime(race_date, start_time);
+    const raceEnd = parseRaceDateTime(race_date, end_time);
+    const raceDay = new Date(`${race_date}T00:00:00`);
+    const month = raceDay.getMonth() + 1;
+    const year = raceDay.getFullYear();
+
+    if (!raceStart || !raceEnd || Number.isNaN(raceDay.getTime())) {
+      return res.status(400).json({ ok: false, error: "Enter a valid race date and time" });
+    }
+
+    if (year !== 2026 || month < 2 || month > 5) {
+      return res.status(400).json({ ok: false, error: "Race date must be between February 1, 2026 and May 31, 2026" });
+    }
+
+    if (Number(team1_id) === Number(team2_id)) {
+      return res.status(400).json({ ok: false, error: "Choose two different teams" });
+    }
+
+    if (raceStart >= raceEnd) {
+      return res.status(400).json({ ok: false, error: "Race end time must be after the start time" });
+    }
+
+    if (raceStart <= new Date()) {
+      return res.status(400).json({ ok: false, error: "Race must be scheduled for a future date and time" });
+    }
+
     // Check if either team already has a race scheduled at the same time/date
     const [teamConflicts] = await pool.query(
       `SELECT race_id FROM races 
@@ -96,7 +127,7 @@ router.post("/races", async (req, res) => {
     );
 
     if (teamConflicts.length > 0) {
-      return res.status(400).json({ ok: false, error: "Failed to create race" });
+      return res.status(400).json({ ok: false, error: "One of those teams already has a race during that time" });
     }
 
     // Check if the course already has a race scheduled at the same time/date
@@ -110,7 +141,7 @@ router.post("/races", async (req, res) => {
     );
 
     if (courseConflicts.length > 0) {
-      return res.status(400).json({ ok: false, error: "Failed to create race" });
+      return res.status(400).json({ ok: false, error: "That course already has a race scheduled during that time" });
     }
 
     const [result] = await pool.query(

@@ -28,6 +28,11 @@ function timeStringToMinutes(timeStr) {
   return Number.isNaN(h) || Number.isNaN(m) ? NaN : h * 60 + m;
 }
 
+function parseRaceDateTime(dateStr, timeStr) {
+  const value = new Date(`${dateStr}T${timeStr}`);
+  return Number.isNaN(value.getTime()) ? null : value;
+}
+
 function buttonStyle(backgroundColor = "#1976d2") {
   return {
     border: "none",
@@ -92,21 +97,26 @@ export default function AdminEventsRaces() {
     event.preventDefault();
     setMessage("");
 
-    if (!raceDate || !team1Id || !team2Id || !startTime || !endTime) {
-      setMessage("Failed to create race");
+    if (!raceName || !raceDate || !team1Id || !team2Id || !courseId || !startTime || !endTime) {
+      setMessage("Fill in all race fields");
       return;
     }
 
     const raceDay = new Date(raceDate);
     if (Number.isNaN(raceDay.getTime())) {
-      setMessage("Failed to create race");
+      setMessage("Enter a valid race date");
       return;
     }
 
     const month = raceDay.getMonth() + 1;
     const year = raceDay.getFullYear();
     if (year !== 2026 || month < 2 || month > 5) {
-      setMessage("Failed to create race");
+      setMessage("Race date must be between February 1, 2026 and May 31, 2026");
+      return;
+    }
+
+    if (team1Id === team2Id) {
+      setMessage("Choose two different teams");
       return;
     }
 
@@ -117,7 +127,18 @@ export default function AdminEventsRaces() {
       Number.isNaN(endMinutes) ||
       startMinutes >= endMinutes
     ) {
-      setMessage("Failed to create race");
+      setMessage("Race end time must be after the start time");
+      return;
+    }
+
+    const raceStart = parseRaceDateTime(raceDate, startTime);
+    if (!raceStart) {
+      setMessage("Enter a valid race date and time");
+      return;
+    }
+
+    if (raceStart <= new Date()) {
+      setMessage("Race must be scheduled for a future date and time");
       return;
     }
 
@@ -150,7 +171,29 @@ export default function AdminEventsRaces() {
     });
 
     if (conflict) {
-      setMessage("Failed to create race");
+      const teamConflict = races.some((race) => {
+        if (race.race_date !== raceDate || race.status === "canceled") return false;
+
+        const existingStart = timeStringToMinutes(race.start_time);
+        const existingEnd = timeStringToMinutes(race.end_time);
+        const timeOverlap = startMinutes < existingEnd && endMinutes > existingStart;
+
+        return (
+          timeOverlap &&
+          (
+            race.team1_id === newTeam1 ||
+            race.team2_id === newTeam1 ||
+            race.team1_id === newTeam2 ||
+            race.team2_id === newTeam2
+          )
+        );
+      });
+
+      setMessage(
+        teamConflict
+          ? "One of those teams already has a race during that time"
+          : "That course already has a race scheduled during that time",
+      );
       return;
     }
 
@@ -168,8 +211,10 @@ export default function AdminEventsRaces() {
       }),
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      setMessage("Failed to create race");
+      setMessage(data.error || "Failed to create race");
       return;
     }
 
@@ -180,8 +225,8 @@ export default function AdminEventsRaces() {
     setCourseId("");
     setTeam1Id("");
     setTeam2Id("");
-    setMessage("Race created");
-    loadData();
+    setMessage(data.message || "Race created");
+    await loadData();
   }
 
   async function handleLoadResults(raceId) {

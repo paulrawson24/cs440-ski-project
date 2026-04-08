@@ -26,6 +26,7 @@ export default function CoachDashboard() {
   const [teamName, setTeamName] = useState("");
   const [members, setMembers] = useState([]);
   const [races, setRaces] = useState([]);
+  const [canceledRaces, setCanceledRaces] = useState([]);
   const [teamResults, setTeamResults] = useState([]);
   const [error, setError] = useState("");
 
@@ -70,13 +71,12 @@ export default function CoachDashboard() {
               skiersData.filter((skier) => Number(skier.team_id) === coachTeamId),
             );
 
-            setRaces(
-              racesData.filter(
-                (race) =>
-                  race.status !== "canceled" &&
-                  (Number(race.team1_id) === coachTeamId || Number(race.team2_id) === coachTeamId),
-              ),
+            const teamRaces = racesData.filter(
+              (race) =>
+                Number(race.team1_id) === coachTeamId || Number(race.team2_id) === coachTeamId,
             );
+            setRaces(teamRaces.filter((race) => race.status !== "canceled"));
+            setCanceledRaces(teamRaces.filter((race) => race.status === "canceled"));
 
             setTeamResults(resultsData.results || []);
             setError("");
@@ -146,6 +146,36 @@ export default function CoachDashboard() {
                   {skier.first_name} {skier.last_name}
                 </li>
               ))}
+            </ul>
+          )}
+        </div>
+
+        <div style={{ marginBottom: "24px" }}>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: "18px", color: "#b3261e" }}>
+            Alerts
+          </p>
+          {canceledRaces.length === 0 ? (
+            <p style={{ marginTop: "8px", color: "#555" }}>
+              No canceled race alerts.
+            </p>
+          ) : (
+            <ul style={{ marginTop: "12px", paddingLeft: "20px", color: "#b3261e" }}>
+              {canceledRaces.map((race) => {
+                const start = formatTime(race.start_time);
+                const end = formatTime(race.end_time);
+                const formattedDate = formatDateWithDot(race.race_date);
+                const course = race.course_name || "Unknown course";
+                const raceTitle =
+                  race.team1_name && race.team2_name
+                    ? `${race.team1_name} V ${race.team2_name}`
+                    : `${race.team1_id || "Team 1"} V ${race.team2_id || "Team 2"}`;
+
+                return (
+                  <li key={race.race_id} style={{ marginBottom: "12px" }}>
+                    Canceled: {race.race_name} - {raceTitle} from {start} to {end} on {formattedDate} at {course}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

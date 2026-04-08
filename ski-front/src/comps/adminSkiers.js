@@ -38,8 +38,10 @@ export default function AdminSkiers() {
       body: JSON.stringify({ skier_id: Number(skierId) }),
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      setMessage("Failed to assign skier");
+      setMessage(data.error || "Failed to assign skier");
       return;
     }
 

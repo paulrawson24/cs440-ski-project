@@ -24,7 +24,17 @@ router.get("/teams", async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT t.team_id, t.team_name, t.coach_id,
-              u.first_name AS coach_first_name, u.last_name AS coach_last_name
+              u.first_name AS coach_first_name, u.last_name AS coach_last_name,
+              (
+                SELECT COUNT(*)
+                FROM users members
+                WHERE members.team_id = t.team_id
+              ) AS member_count,
+              (
+                SELECT COUNT(*)
+                FROM races r
+                WHERE r.team1_id = t.team_id OR r.team2_id = t.team_id
+              ) AS race_count
        FROM teams t
        LEFT JOIN users u ON u.user_id = t.coach_id
        ORDER BY t.team_id`
@@ -51,7 +61,16 @@ router.post("/courses", async (req, res) => {
 
 router.get("/courses", async (req, res) => {
   try {
-    const [rows] = await pool.query("SELECT course_id, course_name FROM courses ORDER BY course_id");
+    const [rows] = await pool.query(
+      `SELECT c.course_id, c.course_name,
+              (
+                SELECT COUNT(*)
+                FROM races r
+                WHERE r.course_id = c.course_id
+              ) AS race_count
+       FROM courses c
+       ORDER BY c.course_id`
+    );
     return res.json(rows);
   } catch (err) {
     return res.status(500).json({ ok: false, error: "Could not fetch courses" });
@@ -185,6 +204,40 @@ router.put("/races/:raceId/cancel", async (req, res) => {
   }
 });
 
+router.delete("/races/:raceId", async (req, res) => {
+  const raceId = Number(req.params.raceId);
+  if (!raceId) {
+    return res.status(400).json({ ok: false, error: "Valid raceId is required" });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT race_id, status
+       FROM races
+       WHERE race_id = ?`,
+      [raceId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ ok: false, error: "Race not found" });
+    }
+
+    if (rows[0].status !== "canceled") {
+      return res.status(400).json({ ok: false, error: "Race must be canceled before deleting" });
+    }
+
+    await pool.query(
+      `DELETE FROM races
+       WHERE race_id = ?`,
+      [raceId]
+    );
+
+    return res.json({ ok: true, message: "Race deleted" });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "Could not delete race" });
+  }
+});
+
 router.post("/races/:raceId/results", async (req, res) => {
   const raceId = Number(req.params.raceId);
   const { results } = req.body;
@@ -246,10 +299,15 @@ router.post("/races/:raceId/results", async (req, res) => {
 router.get("/coaches", async (req, res) => {
   try {
     const [rows] = await pool.query(
-      `SELECT user_id, first_name, last_name, email, team_id
-       FROM users
-       WHERE role = 'coach'
-       ORDER BY user_id`
+      `SELECT u.user_id, u.first_name, u.last_name, u.email, u.team_id,
+              EXISTS(
+                SELECT 1
+                FROM teams t
+                WHERE t.coach_id = u.user_id
+              ) AS is_assigned_coach
+       FROM users u
+       WHERE u.role = 'coach'
+       ORDER BY u.user_id`
     );
     return res.json(rows);
   } catch (err) {
@@ -268,6 +326,239 @@ router.get("/skiers", async (req, res) => {
     return res.json(rows);
   } catch (err) {
     return res.status(500).json({ ok: false, error: "Could not fetch skiers" });
+  }
+});
+
+router.put("/skiers/:userId/remove-team", async (req, res) => {
+  const userId = Number(req.params.userId);
+  if (!userId) {
+    return res.status(400).json({ ok: false, error: "Valid skier userId is required" });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT user_id, team_id
+       FROM users
+       WHERE user_id = ? AND role = 'skier'`,
+      [userId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ ok: false, error: "Skier not found" });
+    }
+
+    if (rows[0].team_id === null) {
+      return res.status(400).json({ ok: false, error: "Skier is not on a team" });
+    }
+
+    await pool.query(
+      `UPDATE users
+       SET team_id = NULL
+       WHERE user_id = ? AND role = 'skier'`,
+      [userId]
+    );
+
+    return res.json({ ok: true, message: "Skier removed from team" });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "Could not remove skier from team" });
+  }
+});
+
+router.delete("/skiers/:userId", async (req, res) => {
+  const userId = Number(req.params.userId);
+  if (!userId) {
+    return res.status(400).json({ ok: false, error: "Valid skier userId is required" });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT user_id, team_id
+       FROM users
+       WHERE user_id = ? AND role = 'skier'`,
+      [userId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ ok: false, error: "Skier not found" });
+    }
+
+    if (rows[0].team_id !== null) {
+      return res.status(400).json({ ok: false, error: "Remove skier from team before deleting" });
+    }
+
+    await pool.query(
+      `DELETE FROM users
+       WHERE user_id = ? AND role = 'skier'`,
+      [userId]
+    );
+
+    return res.json({ ok: true, message: "Skier deleted" });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "Could not delete skier" });
+  }
+});
+
+router.put("/coaches/:userId/remove-team", async (req, res) => {
+  const userId = Number(req.params.userId);
+  if (!userId) {
+    return res.status(400).json({ ok: false, error: "Valid coach userId is required" });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT user_id, team_id
+       FROM users
+       WHERE user_id = ? AND role = 'coach'`,
+      [userId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ ok: false, error: "Coach not found" });
+    }
+
+    if (rows[0].team_id === null) {
+      return res.status(400).json({ ok: false, error: "Coach is not on a team" });
+    }
+
+    await pool.query(
+      `UPDATE teams
+       SET coach_id = NULL
+       WHERE coach_id = ?`,
+      [userId]
+    );
+
+    await pool.query(
+      `UPDATE users
+       SET team_id = NULL
+       WHERE user_id = ? AND role = 'coach'`,
+      [userId]
+    );
+
+    return res.json({ ok: true, message: "Coach removed from team" });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "Could not remove coach from team" });
+  }
+});
+
+router.delete("/coaches/:userId", async (req, res) => {
+  const userId = Number(req.params.userId);
+  if (!userId) {
+    return res.status(400).json({ ok: false, error: "Valid coach userId is required" });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT u.user_id, u.team_id,
+              EXISTS(
+                SELECT 1
+                FROM teams t
+                WHERE t.coach_id = u.user_id
+              ) AS is_assigned_coach
+       FROM users u
+       WHERE u.user_id = ? AND u.role = 'coach'`,
+      [userId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ ok: false, error: "Coach not found" });
+    }
+
+    if (rows[0].team_id !== null || Number(rows[0].is_assigned_coach) === 1) {
+      return res.status(400).json({ ok: false, error: "Remove coach from team before deleting" });
+    }
+
+    await pool.query(
+      `DELETE FROM users
+       WHERE user_id = ? AND role = 'coach'`,
+      [userId]
+    );
+
+    return res.json({ ok: true, message: "Coach deleted" });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "Could not delete coach" });
+  }
+});
+
+router.delete("/courses/:courseId", async (req, res) => {
+  const courseId = Number(req.params.courseId);
+  if (!courseId) {
+    return res.status(400).json({ ok: false, error: "Valid courseId is required" });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT c.course_id,
+              (
+                SELECT COUNT(*)
+                FROM races r
+                WHERE r.course_id = c.course_id
+              ) AS race_count
+       FROM courses c
+       WHERE c.course_id = ?`,
+      [courseId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ ok: false, error: "Course not found" });
+    }
+
+    if (Number(rows[0].race_count) > 0) {
+      return res.status(400).json({ ok: false, error: "Course is used by a race and cannot be deleted" });
+    }
+
+    await pool.query(
+      `DELETE FROM courses
+       WHERE course_id = ?`,
+      [courseId]
+    );
+
+    return res.json({ ok: true, message: "Course deleted" });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "Could not delete course" });
+  }
+});
+
+router.delete("/teams/:teamId", async (req, res) => {
+  const teamId = Number(req.params.teamId);
+  if (!teamId) {
+    return res.status(400).json({ ok: false, error: "Valid teamId is required" });
+  }
+
+  try {
+    const [rows] = await pool.query(
+      `SELECT t.team_id, t.coach_id,
+              (
+                SELECT COUNT(*)
+                FROM users members
+                WHERE members.team_id = t.team_id
+              ) AS member_count,
+              (
+                SELECT COUNT(*)
+                FROM races r
+                WHERE r.team1_id = t.team_id OR r.team2_id = t.team_id
+              ) AS race_count
+       FROM teams t
+       WHERE t.team_id = ?`,
+      [teamId]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({ ok: false, error: "Team not found" });
+    }
+
+    if (Number(rows[0].member_count) > 0 || rows[0].coach_id !== null || Number(rows[0].race_count) > 0) {
+      return res.status(400).json({ ok: false, error: "Team must be empty and unused before deleting" });
+    }
+
+    await pool.query(
+      `DELETE FROM teams
+       WHERE team_id = ?`,
+      [teamId]
+    );
+
+    return res.json({ ok: true, message: "Team deleted" });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "Could not delete team" });
   }
 });
 

@@ -38,6 +38,23 @@ export default function AdminEventsTeams() {
     loadData();
   }
 
+  async function handleDeleteTeam(teamId) {
+    setMessage("");
+
+    const response = await fetch(`${API_BASE}/teams/${teamId}`, {
+      method: "DELETE",
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setMessage(data.error || "Failed to delete team");
+      return;
+    }
+
+    setMessage("Team deleted");
+    loadData();
+  }
+
   return (
     <div
       style={{
@@ -110,6 +127,12 @@ export default function AdminEventsTeams() {
                 <th style={{ textAlign: "center", padding: "12px 8px", borderBottom: "2px solid #e0e0e0" }}>
                   Team
                 </th>
+                <th style={{ textAlign: "center", padding: "12px 8px", borderBottom: "2px solid #e0e0e0" }}>
+                  Status
+                </th>
+                <th style={{ textAlign: "center", padding: "12px 8px", borderBottom: "2px solid #e0e0e0" }}>
+                  Action
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -117,6 +140,43 @@ export default function AdminEventsTeams() {
                 <tr key={team.team_id}>
                   <td style={{ textAlign: "center", padding: "12px 8px", borderBottom: "1px solid #eee" }}>
                     {team.team_name}
+                  </td>
+                  <td style={{ textAlign: "center", padding: "12px 8px", borderBottom: "1px solid #eee" }}>
+                    {Number(team.member_count) === 0 && !team.coach_id && Number(team.race_count) === 0
+                      ? "Empty and unused"
+                      : "In use"}
+                  </td>
+                  <td style={{ textAlign: "center", padding: "12px 8px", borderBottom: "1px solid #eee" }}>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTeam(team.team_id)}
+                      disabled={
+                        Number(team.member_count) > 0 ||
+                        Boolean(team.coach_id) ||
+                        Number(team.race_count) > 0
+                      }
+                      style={{
+                        border: "none",
+                        borderRadius: "6px",
+                        backgroundColor:
+                          Number(team.member_count) === 0 &&
+                          !team.coach_id &&
+                          Number(team.race_count) === 0
+                            ? "#c62828"
+                            : "#bdbdbd",
+                        color: "white",
+                        padding: "8px 10px",
+                        cursor:
+                          Number(team.member_count) === 0 &&
+                          !team.coach_id &&
+                          Number(team.race_count) === 0
+                            ? "pointer"
+                            : "not-allowed",
+                        fontSize: "13px",
+                      }}
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}

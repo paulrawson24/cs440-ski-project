@@ -260,6 +260,30 @@ export default function AdminEventsRaces() {
     loadData();
   }
 
+  async function handleDeleteRace(raceId) {
+    setMessage("");
+    setResultsMessage("");
+
+    const response = await fetch(`${API_BASE}/races/${raceId}`, {
+      method: "DELETE",
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setMessage(data.error || "Failed to delete race");
+      return;
+    }
+
+    if (selectedRaceId === raceId) {
+      setSelectedRaceId("");
+      setResultsRaceData(null);
+      setResultsForm({});
+    }
+
+    setMessage("Race deleted");
+    loadData();
+  }
+
   return (
     <div
       style={{
@@ -477,6 +501,17 @@ export default function AdminEventsRaces() {
                           }}
                         >
                           {race.status === "canceled" ? "Canceled" : "Cancel Race"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRace(race.race_id)}
+                          disabled={race.status !== "canceled"}
+                          style={{
+                            ...buttonStyle(race.status === "canceled" ? "#c62828" : "#9e9e9e"),
+                            cursor: race.status === "canceled" ? "pointer" : "not-allowed",
+                          }}
+                        >
+                          Delete
                         </button>
                       </div>
                     </td>

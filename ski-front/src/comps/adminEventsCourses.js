@@ -38,6 +38,23 @@ export default function AdminEventsCourses() {
     loadData();
   }
 
+  async function handleDeleteCourse(courseId) {
+    setMessage("");
+
+    const response = await fetch(`${API_BASE}/courses/${courseId}`, {
+      method: "DELETE",
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setMessage(data.error || "Failed to delete course");
+      return;
+    }
+
+    setMessage("Course deleted");
+    loadData();
+  }
+
   return (
     <div
       style={{
@@ -110,6 +127,12 @@ export default function AdminEventsCourses() {
                 <th style={{ textAlign: "center", padding: "12px 8px", borderBottom: "2px solid #e0e0e0" }}>
                   Course
                 </th>
+                <th style={{ textAlign: "center", padding: "12px 8px", borderBottom: "2px solid #e0e0e0" }}>
+                  Status
+                </th>
+                <th style={{ textAlign: "center", padding: "12px 8px", borderBottom: "2px solid #e0e0e0" }}>
+                  Action
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -117,6 +140,27 @@ export default function AdminEventsCourses() {
                 <tr key={course.course_id}>
                   <td style={{ textAlign: "center", padding: "12px 8px", borderBottom: "1px solid #eee" }}>
                     {course.course_name}
+                  </td>
+                  <td style={{ textAlign: "center", padding: "12px 8px", borderBottom: "1px solid #eee" }}>
+                    {Number(course.race_count) === 0 ? "Unused" : "Used by race"}
+                  </td>
+                  <td style={{ textAlign: "center", padding: "12px 8px", borderBottom: "1px solid #eee" }}>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCourse(course.course_id)}
+                      disabled={Number(course.race_count) > 0}
+                      style={{
+                        border: "none",
+                        borderRadius: "6px",
+                        backgroundColor: Number(course.race_count) === 0 ? "#c62828" : "#bdbdbd",
+                        color: "white",
+                        padding: "8px 10px",
+                        cursor: Number(course.race_count) === 0 ? "pointer" : "not-allowed",
+                        fontSize: "13px",
+                      }}
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}

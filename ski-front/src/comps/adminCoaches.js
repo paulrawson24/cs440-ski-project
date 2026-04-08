@@ -57,6 +57,40 @@ export default function AdminCoaches() {
     return team ? team.team_name : "None";
   }
 
+  async function handleRemoveFromTeam(userId) {
+    setMessage("");
+
+    const response = await fetch(`${API_BASE}/coaches/${userId}/remove-team`, {
+      method: "PUT",
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setMessage(data.error || "Failed to remove coach from team");
+      return;
+    }
+
+    setMessage("Coach removed from team");
+    loadData();
+  }
+
+  async function handleDeleteCoach(userId) {
+    setMessage("");
+
+    const response = await fetch(`${API_BASE}/coaches/${userId}`, {
+      method: "DELETE",
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      setMessage(data.error || "Failed to delete coach");
+      return;
+    }
+
+    setMessage("Coach deleted");
+    loadData();
+  }
+
   return (
     <div
       style={{
@@ -156,6 +190,9 @@ export default function AdminCoaches() {
                 <th style={{ textAlign: "center", padding: "12px 8px", borderBottom: "2px solid #e0e0e0" }}>
                   Team
                 </th>
+                <th style={{ textAlign: "center", padding: "12px 8px", borderBottom: "2px solid #e0e0e0" }}>
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -166,6 +203,41 @@ export default function AdminCoaches() {
                   </td>
                   <td style={{ textAlign: "center", padding: "12px 8px", borderBottom: "1px solid #eee" }}>
                     {getTeamNameForCoach(coach)}
+                  </td>
+                  <td style={{ textAlign: "center", padding: "12px 8px", borderBottom: "1px solid #eee" }}>
+                    {coach.team_id || Number(coach.is_assigned_coach) === 1 ? (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFromTeam(coach.user_id)}
+                        style={{
+                          border: "none",
+                          borderRadius: "6px",
+                          backgroundColor: "#f57c00",
+                          color: "white",
+                          padding: "8px 10px",
+                          cursor: "pointer",
+                          fontSize: "13px",
+                        }}
+                      >
+                        Remove From Team
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCoach(coach.user_id)}
+                        style={{
+                          border: "none",
+                          borderRadius: "6px",
+                          backgroundColor: "#c62828",
+                          color: "white",
+                          padding: "8px 10px",
+                          cursor: "pointer",
+                          fontSize: "13px",
+                        }}
+                      >
+                        Delete
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

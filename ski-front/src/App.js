@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
+import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import ButtonAppBar from "./comps/baseAppBar";
 import Login from "./comps/login";
 import Register from "./comps/register";
@@ -67,28 +68,41 @@ function Home() {
 
 // Main App component that sets up routing for the entire application
 export default function App() {
+  const theme = createTheme({
+    palette: {
+      primary: { main: "#1976d2" },
+      background: { default: "#f5f7fb" },
+    },
+    typography: {
+      fontFamily: "'Inter', 'Segoe UI', system-ui, sans-serif",
+    },
+  });
+
   return (
-    // BrowserRouter enables client-side routing
-    <BrowserRouter>
-      {/* Navigation bar shown on all pages */}
-      <ButtonAppBar />
-      {/* Define all application routes */}
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        {/* Admin routes for managing the ski league */}
-        <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/admin/coaches" element={<AdminCoaches />} />
-        <Route path="/admin/skiers" element={<AdminSkiers />} />
-        <Route path="/admin/events" element={<AdminEvents />} />
-        <Route path="/admin/events/teams" element={<AdminEventsTeams />} />
-        <Route path="/admin/events/courses" element={<AdminEventsCourses />} />
-        <Route path="/admin/events/races" element={<AdminEventsRaces />} />
-        {/* Dashboard routes for coaches and skiers */}
-        <Route path="/coach" element={<CoachDashboard />} />
-        <Route path="/skier" element={<SkierDashboard />} />
-      </Routes>
-    </BrowserRouter>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      {/* BrowserRouter enables client-side routing */}
+      <BrowserRouter>
+        {/* Navigation bar shown on all pages */}
+        <ButtonAppBar />
+        {/* Define all application routes */}
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          {/* Admin routes for managing the ski league */}
+          <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/admin/coaches" element={<AdminCoaches />} />
+          <Route path="/admin/skiers" element={<AdminSkiers />} />
+          <Route path="/admin/events" element={<AdminEvents />} />
+          <Route path="/admin/events/teams" element={<AdminEventsTeams />} />
+          <Route path="/admin/events/courses" element={<AdminEventsCourses />} />
+          <Route path="/admin/events/races" element={<AdminEventsRaces />} />
+          {/* Dashboard routes for coaches and skiers */}
+          <Route path="/coach" element={<CoachDashboard />} />
+          <Route path="/skier" element={<SkierDashboard />} />
+        </Routes>
+      </BrowserRouter>
+    </ThemeProvider>
   );
 }

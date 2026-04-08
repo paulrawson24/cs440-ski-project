@@ -66,15 +66,28 @@ export default function AdminEventsRaces() {
   const startMinutes = timeStringToMinutes(startTime);
   const endMinutes = timeStringToMinutes(endTime);
 
-  const isFormValid = raceName !== '' 
-                      && raceDate !== '' 
-                      && startTime !== '' 
-                      && endTime !== ''
-                      && courseId !== '' 
-                      && team1Id !== ''
-                      && team2Id !== ''
-                      && team1Id !== team2Id
-                      && startMinutes < endMinutes;
+let createRaceError = "";
+
+if (!raceName) createRaceError = "Enter a race name";
+else if (!raceDate) createRaceError = "Select a race date";
+else if (!startTime) createRaceError = "Select a start time";
+else if (!endTime) createRaceError = "Select an end time";
+else if (!courseId) createRaceError = "Select a course";
+else if (!team1Id) createRaceError = "Select Team 1";
+else if (!team2Id) createRaceError = "Select Team 2";
+else if (team1Id === team2Id) createRaceError = "Teams must be different";
+else if (
+  Number.isNaN(startMinutes) ||
+  Number.isNaN(endMinutes) ||
+  startMinutes >= endMinutes
+) createRaceError = "End time must be after start time";
+const raceStart = parseRaceDateTime(raceDate, startTime);
+
+if (raceStart && raceStart <= new Date()) {
+  createRaceError = "Race must present, not in the past";
+}
+
+const isFormValid = createRaceError === "";
 
 
   async function loadData() {
@@ -495,6 +508,13 @@ export default function AdminEventsRaces() {
             ))}
           </select>
 
+          <div
+            title={!isFormValid ? createRaceError : ""}
+            style={{
+            width: "100%",
+            cursor: "pointer",
+            }}
+          >
           <button
             disabled={!isFormValid}
             type="submit"
@@ -506,11 +526,13 @@ export default function AdminEventsRaces() {
               backgroundColor: isFormValid ? "#1976d2" : "#a9aeb2",
               color: isFormValid ? "white" : "#343434",
               fontSize: "16px",
-              cursor: isFormValid ? "pointer" : "not-allowed",
+              cursor: "pointer",
+              pointerEvents: "none",
             }}
           >
             Create Race
           </button>
+</div>
         </form>
 
         {message && <p style={{ color: "#1976d2", marginTop: "18px" }}>{message}</p>}

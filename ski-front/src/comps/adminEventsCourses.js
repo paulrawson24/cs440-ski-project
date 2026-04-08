@@ -10,6 +10,9 @@ export default function AdminEventsCourses() {
   const [courses, setCourses] = useState([]);
   const [message, setMessage] = useState("");
 
+    const isFormValid = courseName !== '';
+
+
   // Load courses data from API
   async function loadData() {
     const coursesRes = await fetch(`${API_BASE}/courses`);
@@ -88,6 +91,7 @@ export default function AdminEventsCourses() {
 
         <form onSubmit={handleCreateCourse} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <input
+            required
             type="text"
             placeholder="Enter course name"
             value={courseName}
@@ -102,16 +106,17 @@ export default function AdminEventsCourses() {
           />
 
           <button
+            disabled={!isFormValid}
             type="submit"
             style={{
               width: "100%",
               padding: "14px 12px",
               borderRadius: "10px",
               border: "none",
-              backgroundColor: "#1976d2",
-              color: "white",
+              backgroundColor: isFormValid ? "#1976d2" : "#a9aeb2",
+              color: isFormValid ? "white" : "#343434",
               fontSize: "16px",
-              cursor: "pointer",
+              cursor: isFormValid ? "pointer" : "not-allowed",
             }}
           >
             Create Course

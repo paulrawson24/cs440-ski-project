@@ -58,6 +58,20 @@ export default function AdminEventsRaces() {
   const [resultsForm, setResultsForm] = useState({});
   const [resultsMessage, setResultsMessage] = useState("");
 
+  const startMinutes = timeStringToMinutes(startTime);
+  const endMinutes = timeStringToMinutes(endTime);
+
+  const isFormValid = raceName !== '' 
+                      && raceDate !== '' 
+                      && startTime !== '' 
+                      && endTime !== ''
+                      && courseId !== '' 
+                      && team1Id !== ''
+                      && team2Id !== ''
+                      && team1Id !== team2Id
+                      && startMinutes < endMinutes;
+
+
   async function loadData() {
     const [teamsRes, coursesRes, racesRes] = await Promise.all([
       fetch(`${API_BASE}/teams`),
@@ -317,6 +331,7 @@ export default function AdminEventsRaces() {
 
         <form onSubmit={handleCreateRace} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <input
+            required
             type="text"
             placeholder="Enter race name"
             value={raceName}
@@ -331,6 +346,9 @@ export default function AdminEventsRaces() {
           />
 
           <input
+            required
+            min="2026-02-01" 
+            max="2026-05-31"
             type="date"
             value={raceDate}
             onChange={(e) => setRaceDate(e.target.value)}
@@ -345,6 +363,7 @@ export default function AdminEventsRaces() {
 
           <div style={{ display: "flex", gap: "12px" }}>
             <input
+              required
               type="time"
               value={startTime}
               onChange={(e) => setStartTime(e.target.value)}
@@ -357,6 +376,7 @@ export default function AdminEventsRaces() {
               }}
             />
             <input
+              required
               type="time"
               value={endTime}
               onChange={(e) => setEndTime(e.target.value)}
@@ -371,6 +391,7 @@ export default function AdminEventsRaces() {
           </div>
 
           <select
+            required
             value={courseId}
             onChange={(e) => setCourseId(e.target.value)}
             style={{
@@ -390,6 +411,7 @@ export default function AdminEventsRaces() {
           </select>
 
           <select
+            required
             value={team1Id}
             onChange={(e) => setTeam1Id(e.target.value)}
             style={{
@@ -409,6 +431,7 @@ export default function AdminEventsRaces() {
           </select>
 
           <select
+            required
             value={team2Id}
             onChange={(e) => setTeam2Id(e.target.value)}
             style={{
@@ -428,16 +451,17 @@ export default function AdminEventsRaces() {
           </select>
 
           <button
+            disabled={!isFormValid}
             type="submit"
             style={{
               width: "100%",
               padding: "14px 12px",
               borderRadius: "10px",
               border: "none",
-              backgroundColor: "#1976d2",
-              color: "white",
+              backgroundColor: isFormValid ? "#1976d2" : "#a9aeb2",
+              color: isFormValid ? "white" : "#343434",
               fontSize: "16px",
-              cursor: "pointer",
+              cursor: isFormValid ? "pointer" : "not-allowed",
             }}
           >
             Create Race

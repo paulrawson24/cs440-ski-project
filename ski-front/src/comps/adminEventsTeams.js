@@ -10,6 +10,8 @@ export default function AdminEventsTeams() {
   const [teams, setTeams] = useState([]);
   const [message, setMessage] = useState("");
 
+  const isFormValid = teamName !== '';
+
   // Load teams data from API
   async function loadData() {
     const teamsRes = await fetch(`${API_BASE}/teams`);
@@ -88,6 +90,7 @@ export default function AdminEventsTeams() {
 
         <form onSubmit={handleCreateTeam} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <input
+            required
             type="text"
             placeholder="Enter team name"
             value={teamName}
@@ -102,16 +105,17 @@ export default function AdminEventsTeams() {
           />
 
           <button
+            disabled={!isFormValid}
             type="submit"
             style={{
               width: "100%",
               padding: "14px 12px",
               borderRadius: "10px",
               border: "none",
-              backgroundColor: "#1976d2",
-              color: "white",
+              backgroundColor: isFormValid ? "#1976d2" : "#a9aeb2",
+              color: isFormValid ? "white" : "#343434",
               fontSize: "16px",
-              cursor: "pointer",
+              cursor: isFormValid ? "pointer" : "not-allowed",
             }}
           >
             Create Team

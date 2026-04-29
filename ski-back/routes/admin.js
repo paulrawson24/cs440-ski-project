@@ -7,6 +7,12 @@ function parseRaceDateTime(dateStr, timeStr) {
   return Number.isNaN(value.getTime()) ? null : value;
 }
 
+function getRaceResult(teamTime, opponentTime) {
+  if (teamTime < opponentTime) return "win";
+  if (teamTime > opponentTime) return "loss";
+  return "tie";
+}
+
 router.get("/", (req, res) => {
   res.json({ ok: true, area: "admin" });
 });
@@ -324,6 +330,250 @@ router.post("/races/:raceId/results", async (req, res) => {
     return res.json({ ok: true, message: "Race results saved" });
   } catch (err) {
     return res.status(500).json({ ok: false, error: "Could not save race results" });
+  }
+});
+
+router.get("/reports/team-stats", async (_req, res) => {
+  try {
+    const completedRaceSubquery = `
+      SELECT r2.race_id
+      FROM races r2
+      JOIN race_results rr2 ON rr2.race_id = r2.race_id
+      JOIN users u2 ON u2.user_id = rr2.user_id
+      WHERE r2.status <> 'canceled'
+      GROUP BY r2.race_id, r2.team1_id, r2.team2_id
+      HAVING COUNT(CASE WHEN u2.team_id = r2.team1_id THEN 1 END) = 2
+         AND COUNT(CASE WHEN u2.team_id = r2.team2_id THEN 1 END) = 2
+    `;
+
+    const [rows] = await pool.query(
+      `SELECT r.race_id, r.race_name, r.race_date, c.course_name,
+              r.team1_id, t1.team_name AS team1_name,
+              r.team2_id, t2.team_name AS team2_name,
+              SUM(CASE WHEN u.team_id = r.team1_id THEN rr.time_seconds ELSE 0 END) AS team1_time,
+              SUM(CASE WHEN u.team_id = r.team2_id THEN rr.time_seconds ELSE 0 END) AS team2_time,
+              COUNT(CASE WHEN u.team_id = r.team1_id THEN 1 END) AS team1_count,
+              COUNT(CASE WHEN u.team_id = r.team2_id THEN 1 END) AS team2_count
+       FROM races r
+       JOIN courses c ON c.course_id = r.course_id
+       JOIN teams t1 ON t1.team_id = r.team1_id
+       JOIN teams t2 ON t2.team_id = r.team2_id
+       JOIN race_results rr ON rr.race_id = r.race_id
+       JOIN users u ON u.user_id = rr.user_id
+       WHERE r.status <> 'canceled'
+       GROUP BY r.race_id, r.race_name, r.race_date, c.course_name,
+                r.team1_id, t1.team_name, r.team2_id, t2.team_name
+       HAVING team1_count = 2 AND team2_count = 2
+       ORDER BY r.race_date, r.race_id`
+    );
+
+    const [teamRows] = await pool.query(
+      `SELECT t.team_id, t.team_name,
+              coach.first_name AS coach_first_name,
+              coach.last_name AS coach_last_name,
+              skier.user_id AS skier_user_id,
+              skier.first_name AS skier_first_name,
+              skier.last_name AS skier_last_name
+       FROM teams t
+       LEFT JOIN users coach
+         ON coach.user_id = t.coach_id
+       LEFT JOIN users skier
+         ON skier.team_id = t.team_id AND skier.role = 'skier'
+       ORDER BY t.team_name, skier.last_name, skier.first_name`
+    );
+
+    const [skierStatRows] = await pool.query(
+      `SELECT u.user_id, u.team_id,
+              COUNT(rr.race_id) AS race_count,
+              SUM(rr.time_seconds) AS total_time,
+              ROUND(AVG(rr.time_seconds), 2) AS average_time
+       FROM users u
+       JOIN race_results rr ON rr.user_id = u.user_id
+       JOIN races r ON r.race_id = rr.race_id
+       WHERE u.role = 'skier'
+         AND r.race_id IN (${completedRaceSubquery})
+       GROUP BY u.user_id, u.team_id`
+    );
+
+    const teamMap = new Map();
+    const skierStatsMap = new Map(
+      skierStatRows.map((row) => [
+        Number(row.user_id),
+        {
+          race_count: Number(row.race_count),
+          total_time: Number(row.total_time),
+          average_time: Number(row.average_time),
+        },
+      ])
+    );
+
+    function ensureTeam(teamId, teamName, coachName = "Unassigned") {
+      if (!teamMap.has(teamId)) {
+        teamMap.set(teamId, {
+          team_id: teamId,
+          team_name: teamName,
+          coach_name: coachName,
+          wins: 0,
+          losses: 0,
+          ties: 0,
+          avg_team_time: null,
+          completed_races: 0,
+          team_time_total: 0,
+          skiers: [],
+          races: [],
+        });
+      }
+
+      return teamMap.get(teamId);
+    }
+
+    for (const row of teamRows) {
+      const teamId = Number(row.team_id);
+      const coachName = row.coach_first_name && row.coach_last_name
+        ? `${row.coach_first_name} ${row.coach_last_name}`
+        : "Unassigned";
+      const team = ensureTeam(teamId, row.team_name, coachName);
+
+      if (Number(row.skier_user_id)) {
+        const skierId = Number(row.skier_user_id);
+        const alreadyIncluded = team.skiers.some((skier) => skier.user_id === skierId);
+
+        if (!alreadyIncluded) {
+          const skierStats = skierStatsMap.get(skierId);
+          team.skiers.push({
+            user_id: skierId,
+            first_name: row.skier_first_name,
+            last_name: row.skier_last_name,
+            race_count: skierStats?.race_count ?? 0,
+            total_time: skierStats?.total_time ?? null,
+            average_time: skierStats?.average_time ?? null,
+          });
+        }
+      }
+    }
+
+    for (const row of rows) {
+      const team1Time = Number(row.team1_time);
+      const team2Time = Number(row.team2_time);
+      const team1Result = getRaceResult(team1Time, team2Time);
+      const team2Result = getRaceResult(team2Time, team1Time);
+
+      const team1 = ensureTeam(Number(row.team1_id), row.team1_name);
+      const team2 = ensureTeam(Number(row.team2_id), row.team2_name);
+
+      team1.races.push({
+        race_id: row.race_id,
+        race_name: row.race_name,
+        race_date: row.race_date,
+        course_name: row.course_name,
+        opponent_name: row.team2_name,
+        team_time: team1Time,
+        opponent_time: team2Time,
+        result: team1Result,
+      });
+
+      team2.races.push({
+        race_id: row.race_id,
+        race_name: row.race_name,
+        race_date: row.race_date,
+        course_name: row.course_name,
+        opponent_name: row.team1_name,
+        team_time: team2Time,
+        opponent_time: team1Time,
+        result: team2Result,
+      });
+
+      team1.completed_races += 1;
+      team2.completed_races += 1;
+      team1.team_time_total += team1Time;
+      team2.team_time_total += team2Time;
+
+      if (team1Result === "win") team1.wins += 1;
+      else if (team1Result === "loss") team1.losses += 1;
+      else team1.ties += 1;
+
+      if (team2Result === "win") team2.wins += 1;
+      else if (team2Result === "loss") team2.losses += 1;
+      else team2.ties += 1;
+    }
+
+    const teams = Array.from(teamMap.values())
+      .map((team) => ({
+        ...team,
+        avg_team_time: team.completed_races > 0
+          ? Number((team.team_time_total / team.completed_races).toFixed(2))
+          : null,
+        skiers: team.skiers.sort((a, b) =>
+          `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`)
+        ),
+      }))
+      .sort((a, b) => {
+        if (b.wins !== a.wins) return b.wins - a.wins;
+        if (a.losses !== b.losses) return a.losses - b.losses;
+        if (b.ties !== a.ties) return b.ties - a.ties;
+        if (a.avg_team_time === null && b.avg_team_time !== null) return 1;
+        if (a.avg_team_time !== null && b.avg_team_time === null) return -1;
+        if (a.avg_team_time !== null && b.avg_team_time !== null && a.avg_team_time !== b.avg_team_time) {
+          return a.avg_team_time - b.avg_team_time;
+        }
+        return a.team_name.localeCompare(b.team_name);
+      })
+      .map((team, index) => ({
+        ...team,
+        rank: index + 1,
+      }));
+
+    return res.json({ ok: true, teams });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "Could not load team stats report" });
+  }
+});
+
+router.get("/reports/skier-stats", async (_req, res) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT u.user_id, u.first_name, u.last_name, u.team_id, t.team_name,
+              COUNT(rr.race_id) AS race_count,
+              SUM(rr.time_seconds) AS total_time,
+              ROUND(AVG(rr.time_seconds), 2) AS average_time
+       FROM users u
+       JOIN teams t ON t.team_id = u.team_id
+       JOIN race_results rr ON rr.user_id = u.user_id
+       JOIN races r ON r.race_id = rr.race_id
+       WHERE u.role = 'skier'
+         AND r.race_id IN (
+           SELECT completed.race_id
+           FROM (
+             SELECT r2.race_id,
+                    COUNT(CASE WHEN u2.team_id = r2.team1_id THEN 1 END) AS team1_count,
+                    COUNT(CASE WHEN u2.team_id = r2.team2_id THEN 1 END) AS team2_count
+             FROM races r2
+             JOIN race_results rr2 ON rr2.race_id = r2.race_id
+             JOIN users u2 ON u2.user_id = rr2.user_id
+             WHERE r2.status <> 'canceled'
+             GROUP BY r2.race_id, r2.team1_id, r2.team2_id
+             HAVING team1_count = 2 AND team2_count = 2
+           ) AS completed
+         )
+       GROUP BY u.user_id, u.first_name, u.last_name, u.team_id, t.team_name
+       ORDER BY average_time ASC, total_time ASC, u.last_name ASC, u.first_name ASC`
+    );
+
+    const skiers = rows.map((row, index) => ({
+      rank: index + 1,
+      user_id: row.user_id,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      team_id: row.team_id,
+      team_name: row.team_name,
+      race_count: Number(row.race_count),
+      total_time: Number(row.total_time),
+      average_time: Number(row.average_time),
+    }));
+
+    return res.json({ ok: true, skiers });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: "Could not load skier stats report" });
   }
 });
 

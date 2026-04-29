@@ -128,6 +128,23 @@ export default function CoachDashboard() {
           Welcome, Coach {user.first_name} {user.last_name}
         </p>
 
+        <button
+          onClick={() => navigate("/league-stats")}
+          style={{
+            alignSelf: "flex-start",
+            marginBottom: "24px",
+            backgroundColor: "#1976d2",
+            color: "white",
+            border: "none",
+            padding: "10px 16px",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontSize: "14px",
+          }}
+        >
+          League Stats
+        </button>
+
         <div style={{ marginBottom: "24px" }}>
           <p style={{ margin: 0, fontWeight: 700, fontSize: "18px" }}>Team</p>
           <p style={{ marginTop: "8px", color: "#333" }}>

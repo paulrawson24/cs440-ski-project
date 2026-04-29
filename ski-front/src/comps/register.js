@@ -12,12 +12,6 @@ export default function Register() {
   const [role, setRole] = React.useState("");
   const [error, setError] = React.useState("");
 
-  // Navigate back to login page
-  const handleBack = (e) => {
-    e.preventDefault();
-    navigate("/login");
-  };
-
   // Handle form submission for user registration
   const handleSubmit = async (e) => {
     e.preventDefault();

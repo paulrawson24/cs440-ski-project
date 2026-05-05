@@ -153,7 +153,6 @@ export default function Register() {
             </option>
             <option value="skier">Skier</option>
             <option value="coach">Coach</option>
-            <option value="admin">League Admin</option>
           </select>
           <button
             type="submit"

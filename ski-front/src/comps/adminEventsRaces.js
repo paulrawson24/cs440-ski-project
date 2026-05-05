@@ -84,7 +84,7 @@ else if (
 const raceStart = parseRaceDateTime(raceDate, startTime);
 
 if (raceStart && raceStart <= new Date()) {
-  createRaceError = "Race must present, not in the past";
+  createRaceError = "Race must be present, not in the past";
 }
 
 const isFormValid = createRaceError === "";
@@ -303,10 +303,15 @@ const isFormValid = createRaceError === "";
       return;
     }
 
-    setResultsMessage("Race results saved");
-    handleLoadResults(selectedRaceId);
+    setMessage("Race results saved");
+    handleCloseResults();
   }
-
+  function handleCloseResults() {
+    setSelectedRaceId("");
+    setResultsRaceData(null);
+    setResultsForm({});
+    setResultsMessage("");
+  }
   async function handleCancelRace(raceId) {
     setMessage("");
     setResultsMessage("");
@@ -561,6 +566,7 @@ const isFormValid = createRaceError === "";
                   race.team1_name && race.team2_name
                     ? `${race.team1_name} V ${race.team2_name}`
                     : race.race_name || "Unknown race";
+                const isCanceled = race.status === "canceled";
 
                 return (
                   <tr key={race.race_id}>
@@ -568,8 +574,8 @@ const isFormValid = createRaceError === "";
                       {race.race_name}: {raceTitle} from {start} to {end} on {formattedDate} at {course}
                     </td>
                     <td style={{ textAlign: "left", padding: "12px 8px", borderBottom: "1px solid #eee" }}>
-                      <span style={{ color: race.status === "canceled" ? "#c62828" : "#2e7d32", fontWeight: 600 }}>
-                        {race.status === "canceled" ? "Canceled" : "Scheduled"}
+                      <span style={{ color: isCanceled ? "#c62828" : "#2e7d32", fontWeight: 600 }}>
+                        {isCanceled ? "Canceled" : "Scheduled"}
                       </span>
                     </td>
                     <td style={{ textAlign: "left", padding: "12px 8px", borderBottom: "1px solid #eee" }}>
@@ -577,28 +583,32 @@ const isFormValid = createRaceError === "";
                         <button
                           type="button"
                           onClick={() => handleLoadResults(race.race_id)}
-                          style={buttonStyle()}
+                          disabled={isCanceled}
+                          style={{
+                            ...buttonStyle(isCanceled ? "#9e9e9e" : "#1976d2"),
+                            cursor: isCanceled ? "not-allowed" : "pointer",
+                          }}
                         >
                           Enter Results
                         </button>
                         <button
                           type="button"
                           onClick={() => handleCancelRace(race.race_id)}
-                          disabled={race.status === "canceled"}
+                          disabled={isCanceled}
                           style={{
-                            ...buttonStyle(race.status === "canceled" ? "#9e9e9e" : "#d32f2f"),
-                            cursor: race.status === "canceled" ? "not-allowed" : "pointer",
+                            ...buttonStyle(isCanceled ? "#9e9e9e" : "#d32f2f"),
+                            cursor: isCanceled ? "not-allowed" : "pointer",
                           }}
                         >
-                          {race.status === "canceled" ? "Canceled" : "Cancel Race"}
+                          {isCanceled ? "Canceled" : "Cancel Race"}
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDeleteRace(race.race_id)}
-                          disabled={race.status !== "canceled"}
+                          disabled={!isCanceled}
                           style={{
-                            ...buttonStyle(race.status === "canceled" ? "#c62828" : "#9e9e9e"),
-                            cursor: race.status === "canceled" ? "pointer" : "not-allowed",
+                            ...buttonStyle(isCanceled ? "#c62828" : "#9e9e9e"),
+                            cursor: isCanceled ? "pointer" : "not-allowed",
                           }}
                         >
                           Delete
@@ -662,9 +672,18 @@ const isFormValid = createRaceError === "";
                 </div>
               ))}
 
-              <button type="submit" style={buttonStyle()}>
-                Save Results
-              </button>
+              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "16px" }}>
+                <button type="submit" style={buttonStyle()}>
+                  Save Results
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCloseResults}
+                  style={buttonStyle("#1976d2")}
+                >
+                  Close Results
+                </button>
+              </div>
             </form>
 
             {resultsMessage && <p style={{ color: "#1976d2", marginTop: "16px" }}>{resultsMessage}</p>}

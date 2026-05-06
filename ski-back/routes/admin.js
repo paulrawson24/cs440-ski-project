@@ -4,7 +4,9 @@ const pool = require("../db");
 
 function parseRaceDateTime(dateStr, timeStr) {
   // Build a date from MySQL date/time values
-  const dateOnly = String(dateStr).slice(0, 10);
+  const dateOnly = dateStr instanceof Date
+    ? dateStr.toISOString().slice(0, 10)
+    : String(dateStr).slice(0, 10);
   const value = new Date(`${dateOnly}T${timeStr}`);
   return Number.isNaN(value.getTime()) ? null : value;
 }

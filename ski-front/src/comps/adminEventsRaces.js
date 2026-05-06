@@ -555,6 +555,9 @@ const sortedRaces = [...races].sort(compareRaces);
         </form>
 
         {message && <p style={{ color: "#1976d2", marginTop: "18px" }}>{message}</p>}
+        {!resultsRaceData && resultsMessage && (
+          <p style={{ color: "#c62828", marginTop: "12px" }}>{resultsMessage}</p>
+        )}
 
         <div style={{ overflowX: "auto", marginTop: "28px" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>

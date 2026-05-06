@@ -40,7 +40,7 @@ CREATE TABLE races (
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
     course_id INT NOT NULL,
-    status ENUM('scheduled', 'canceled') NOT NULL DEFAULT 'scheduled',
+    status ENUM('scheduled', 'completed', 'canceled') NOT NULL DEFAULT 'scheduled',
     FOREIGN KEY (course_id) REFERENCES courses(course_id)
         ON DELETE CASCADE
 );

@@ -29,22 +29,57 @@ function timeStringToMinutes(timeStr) {
 }
 
 function parseRaceDateTime(dateStr, timeStr) {
-  const value = new Date(`${dateStr}T${timeStr}`);
+  // Build a date from MySQL date/time values
+  const dateOnly = String(dateStr).slice(0, 10);
+  const value = new Date(`${dateOnly}T${timeStr}`);
   return Number.isNaN(value.getTime()) ? null : value;
 }
 
 function getRaceTeamIds(race) {
+  // Read teams from the new array shape
   if (Array.isArray(race.team_ids)) return race.team_ids.map(Number);
   return [race.team1_id, race.team2_id].map(Number).filter(Boolean);
 }
 
 function getRaceTitle(race) {
+  // Display all teams in a race
   if (Array.isArray(race.team_names) && race.team_names.length > 0) {
     return race.team_names.join(" V ");
   }
 
   if (race.team1_name && race.team2_name) return `${race.team1_name} V ${race.team2_name}`;
   return race.race_name || "Unknown race";
+}
+
+function hasRaceEnded(race) {
+  // Only allow results after the race end time
+  const dateOnly = String(race.race_date).slice(0, 10);
+  const raceEnd = new Date(`${dateOnly}T${race.end_time}`);
+  return !Number.isNaN(raceEnd.getTime()) && raceEnd <= new Date();
+}
+
+function getRaceSortGroup(race) {
+  if (race.status === "canceled") return 1;
+  if (race.status === "completed") return 2;
+  return 0;
+}
+
+function compareRaces(a, b) {
+  // Sort races by status, then date
+  const groupDifference = getRaceSortGroup(a) - getRaceSortGroup(b);
+  if (groupDifference !== 0) return groupDifference;
+
+  const aStart = parseRaceDateTime(a.race_date, a.start_time);
+  const bStart = parseRaceDateTime(b.race_date, b.start_time);
+
+  if (aStart && bStart && aStart.getTime() !== bStart.getTime()) {
+    return aStart - bStart;
+  }
+
+  if (aStart && !bStart) return -1;
+  if (!aStart && bStart) return 1;
+
+  return String(a.race_name || "").localeCompare(String(b.race_name || ""));
 }
 
 function buttonStyle(backgroundColor = "#1976d2") {
@@ -99,6 +134,7 @@ if (raceStart && raceStart <= new Date()) {
 }
 
 const isFormValid = createRaceError === "";
+const sortedRaces = [...races].sort(compareRaces);
 
 
   async function loadData() {
@@ -129,13 +165,6 @@ const isFormValid = createRaceError === "";
     const raceDay = new Date(raceDate);
     if (Number.isNaN(raceDay.getTime())) {
       setMessage("Enter a valid race date");
-      return;
-    }
-
-    const month = raceDay.getMonth() + 1;
-    const year = raceDay.getFullYear();
-    if (year !== 2026 || month < 2 || month > 5) {
-      setMessage("Race date must be between February 1, 2026 and May 31, 2026");
       return;
     }
 
@@ -306,6 +335,7 @@ const isFormValid = createRaceError === "";
     }
 
     setMessage("Race results saved");
+    await loadData();
     handleCloseResults();
   }
   function handleCloseResults() {
@@ -412,8 +442,6 @@ const isFormValid = createRaceError === "";
 
           <input
             required
-            min="2026-02-01" 
-            max="2026-05-31"
             type="date"
             value={raceDate}
             onChange={(e) => setRaceDate(e.target.value)}
@@ -544,13 +572,26 @@ const isFormValid = createRaceError === "";
               </tr>
             </thead>
             <tbody>
-              {races.map((race) => {
+              {sortedRaces.map((race) => {
                 const start = formatTime(race.start_time);
                 const end = formatTime(race.end_time);
                 const formattedDate = formatDateWithDot(race.race_date);
                 const course = race.course_name || "Unknown course";
                 const raceTitle = getRaceTitle(race);
                 const isCanceled = race.status === "canceled";
+                const isCompleted = race.status === "completed";
+                const raceEnded = hasRaceEnded(race);
+                const canEnterResults = !isCanceled && raceEnded;
+                const statusLabel = isCanceled
+                  ? "Canceled"
+                  : isCompleted
+                    ? "Completed"
+                    : "Scheduled";
+                const statusColor = isCanceled
+                  ? "#c62828"
+                  : isCompleted
+                    ? "#1565c0"
+                    : "#2e7d32";
 
                 return (
                   <tr key={race.race_id}>
@@ -558,8 +599,8 @@ const isFormValid = createRaceError === "";
                       {race.race_name}: {raceTitle} from {start} to {end} on {formattedDate} at {course}
                     </td>
                     <td style={{ textAlign: "left", padding: "12px 8px", borderBottom: "1px solid #eee" }}>
-                      <span style={{ color: isCanceled ? "#c62828" : "#2e7d32", fontWeight: 600 }}>
-                        {isCanceled ? "Canceled" : "Scheduled"}
+                      <span style={{ color: statusColor, fontWeight: 600 }}>
+                        {statusLabel}
                       </span>
                     </td>
                     <td style={{ textAlign: "left", padding: "12px 8px", borderBottom: "1px solid #eee" }}>
@@ -567,13 +608,14 @@ const isFormValid = createRaceError === "";
                         <button
                           type="button"
                           onClick={() => handleLoadResults(race.race_id)}
-                          disabled={isCanceled}
+                          disabled={!canEnterResults}
+                          title={!raceEnded && !isCanceled ? "Results are available after the race ends" : ""}
                           style={{
-                            ...buttonStyle(isCanceled ? "#9e9e9e" : "#1976d2"),
-                            cursor: isCanceled ? "not-allowed" : "pointer",
+                            ...buttonStyle(canEnterResults ? "#1976d2" : "#9e9e9e"),
+                            cursor: canEnterResults ? "pointer" : "not-allowed",
                           }}
                         >
-                          Enter Results
+                          {raceEnded ? "Enter Results" : "Race Not Ended"}
                         </button>
                         <button
                           type="button"

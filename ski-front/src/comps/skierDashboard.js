@@ -21,6 +21,7 @@ function formatDateWithDot(dateStr) {
 }
 
 function raceIncludesTeam(race, teamId) {
+  // Check if this team is in the race
   const teamIds = Array.isArray(race.team_ids)
     ? race.team_ids
     : [race.team1_id, race.team2_id];
@@ -28,12 +29,20 @@ function raceIncludesTeam(race, teamId) {
 }
 
 function getRaceTitle(race) {
+  // Display all teams in a race
   if (Array.isArray(race.team_names) && race.team_names.length > 0) {
     return race.team_names.join(" V ");
   }
 
   if (race.team1_name && race.team2_name) return `${race.team1_name} V ${race.team2_name}`;
   return `${race.team1_id || "Team 1"} V ${race.team2_id || "Team 2"}`;
+}
+
+function isUpcomingRace(race) {
+  // Show only future races on the dashboard
+  const dateOnly = String(race.race_date).slice(0, 10);
+  const raceDateTime = new Date(`${dateOnly}T${race.start_time}`);
+  return !Number.isNaN(raceDateTime.getTime()) && raceDateTime > new Date();
 }
 
 export default function SkierDashboard() {
@@ -90,7 +99,9 @@ export default function SkierDashboard() {
             const teamRaces = racesData.filter(
               (race) => raceIncludesTeam(race, skierTeamId),
             );
-            setRaces(teamRaces.filter((race) => race.status !== "canceled"));
+            setRaces(
+              teamRaces.filter((race) => race.status !== "canceled" && isUpcomingRace(race)),
+            );
             setCanceledRaces(teamRaces.filter((race) => race.status === "canceled"));
 
             setResults(resultsData.results || []);

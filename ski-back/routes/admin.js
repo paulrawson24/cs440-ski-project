@@ -3,8 +3,16 @@ const router = express.Router();
 const pool = require("../db");
 
 function parseRaceDateTime(dateStr, timeStr) {
-  const value = new Date(`${dateStr}T${timeStr}`);
+  // Build a date from MySQL date/time values
+  const dateOnly = String(dateStr).slice(0, 10);
+  const value = new Date(`${dateOnly}T${timeStr}`);
   return Number.isNaN(value.getTime()) ? null : value;
+}
+
+function hasRaceEnded(race) {
+  // Check if results can be entered
+  const raceEnd = parseRaceDateTime(race.race_date, race.end_time);
+  return raceEnd !== null && raceEnd <= new Date();
 }
 
 function getRaceResult(teamTime, opponentTime) {
@@ -14,6 +22,7 @@ function getRaceResult(teamTime, opponentTime) {
 }
 
 function normalizeTeamIds(body) {
+  // Support the new team_ids array and old team1/team2 fields
   const rawIds = Array.isArray(body.team_ids)
     ? body.team_ids
     : [body.team1_id, body.team2_id];
@@ -26,6 +35,7 @@ function placeholders(values) {
 }
 
 function hydrateRaceTeams(row) {
+  // Convert grouped team data into arrays for the frontend
   const teamIds = row.team_ids_csv
     ? row.team_ids_csv.split(",").map(Number)
     : [];
@@ -134,15 +144,9 @@ router.post("/races", async (req, res) => {
     const raceStart = parseRaceDateTime(race_date, start_time);
     const raceEnd = parseRaceDateTime(race_date, end_time);
     const raceDay = new Date(`${race_date}T00:00:00`);
-    const month = raceDay.getMonth() + 1;
-    const year = raceDay.getFullYear();
 
     if (!raceStart || !raceEnd || Number.isNaN(raceDay.getTime())) {
       return res.status(400).json({ ok: false, error: "Enter a valid race date and time" });
-    }
-
-    if (year !== 2026 || month < 2 || month > 5) {
-      return res.status(400).json({ ok: false, error: "Race date must be between February 1, 2026 and May 31, 2026" });
     }
 
     if (raceStart >= raceEnd) {
@@ -153,7 +157,31 @@ router.post("/races", async (req, res) => {
       return res.status(400).json({ ok: false, error: "Race must be scheduled for a future date and time" });
     }
 
-    // Check if either team already has a race scheduled at the same time/date
+    // Make sure every selected team has a coach and two skiers
+    const [teamRows] = await pool.query(
+      `SELECT t.team_id, t.team_name, t.coach_id,
+              COUNT(s.user_id) AS skier_count
+       FROM teams t
+       LEFT JOIN users s
+         ON s.team_id = t.team_id AND s.role = 'skier'
+       WHERE t.team_id IN (${placeholders(teamIds)})
+       GROUP BY t.team_id, t.team_name, t.coach_id`,
+      teamIds
+    );
+
+    if (teamRows.length !== teamIds.length) {
+      return res.status(400).json({ ok: false, error: "One or more selected teams do not exist" });
+    }
+
+    const incompleteTeam = teamRows.find((team) => !team.coach_id || Number(team.skier_count) !== 2);
+    if (incompleteTeam) {
+      return res.status(400).json({
+        ok: false,
+        error: `${incompleteTeam.team_name} must have a coach and 2 skiers before it can race`,
+      });
+    }
+
+    // Check if any team already has a race scheduled at the same time/date
     const [teamConflicts] = await pool.query(
       `SELECT DISTINCT r.race_id
        FROM races r
@@ -186,6 +214,7 @@ router.post("/races", async (req, res) => {
     const connection = await pool.getConnection();
     try {
       await connection.beginTransaction();
+      // Create the race first, then attach all selected teams
       const [result] = await connection.query(
         `INSERT INTO races (race_name, race_date, start_time, end_time, course_id)
          VALUES (?, ?, ?, ?, ?)`,
@@ -240,19 +269,28 @@ router.get("/races/:raceId/results", async (req, res) => {
 
   try {
     const [[race]] = await pool.query(
-      `SELECT r.race_id, r.race_name, r.status,
+      `SELECT r.race_id, r.race_name, r.race_date, r.end_time, r.status,
               GROUP_CONCAT(t.team_id ORDER BY rt.position) AS team_ids_csv,
               GROUP_CONCAT(t.team_name ORDER BY rt.position SEPARATOR '||') AS team_names_csv
        FROM races r
        JOIN race_teams rt ON rt.race_id = r.race_id
        JOIN teams t ON t.team_id = rt.team_id
        WHERE r.race_id = ?
-       GROUP BY r.race_id, r.race_name, r.status`,
+       GROUP BY r.race_id, r.race_name, r.race_date, r.end_time, r.status`,
       [raceId]
     );
 
     if (!race) {
       return res.status(404).json({ ok: false, error: "Race not found" });
+    }
+
+    if (race.status === "canceled") {
+      return res.status(400).json({ ok: false, error: "Cannot enter results for a canceled race" });
+    }
+
+    // Do not allow results before the race ends
+    if (!hasRaceEnded(race)) {
+      return res.status(400).json({ ok: false, error: "Results can only be entered after the race ends" });
     }
 
     const hydratedRace = hydrateRaceTeams(race);
@@ -341,17 +379,26 @@ router.post("/races/:raceId/results", async (req, res) => {
 
   try {
     const [[race]] = await pool.query(
-      `SELECT r.race_id,
+      `SELECT r.race_id, r.race_date, r.end_time, r.status,
               GROUP_CONCAT(rt.team_id ORDER BY rt.position) AS team_ids_csv
        FROM races r
        JOIN race_teams rt ON rt.race_id = r.race_id
        WHERE r.race_id = ?
-       GROUP BY r.race_id`,
+       GROUP BY r.race_id, r.race_date, r.end_time, r.status`,
       [raceId]
     );
 
     if (!race) {
       return res.status(404).json({ ok: false, error: "Race not found" });
+    }
+
+    if (race.status === "canceled") {
+      return res.status(400).json({ ok: false, error: "Cannot save results for a canceled race" });
+    }
+
+    // Keep backend validation in sync with the admin UI
+    if (!hasRaceEnded(race)) {
+      return res.status(400).json({ ok: false, error: "Results can only be saved after the race ends" });
     }
 
     const teamIds = race.team_ids_csv.split(",").map(Number);
@@ -386,6 +433,13 @@ router.post("/races/:raceId/results", async (req, res) => {
         [raceId, Number(item.user_id), Number(item.time_seconds)]
       );
     }
+
+    await pool.query(
+      `UPDATE races
+       SET status = 'completed'
+       WHERE race_id = ?`,
+      [raceId]
+    );
 
     return res.json({ ok: true, message: "Race results saved" });
   } catch (err) {

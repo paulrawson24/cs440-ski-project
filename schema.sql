@@ -10,7 +10,7 @@ CREATE TABLE users (
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
     role ENUM('admin', 'coach', 'skier') NOT NULL,
     team_id INT NULL,
     FOREIGN KEY (team_id) REFERENCES teams(team_id)

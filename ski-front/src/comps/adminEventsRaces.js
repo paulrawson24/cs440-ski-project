@@ -33,6 +33,20 @@ function parseRaceDateTime(dateStr, timeStr) {
   return Number.isNaN(value.getTime()) ? null : value;
 }
 
+function getRaceTeamIds(race) {
+  if (Array.isArray(race.team_ids)) return race.team_ids.map(Number);
+  return [race.team1_id, race.team2_id].map(Number).filter(Boolean);
+}
+
+function getRaceTitle(race) {
+  if (Array.isArray(race.team_names) && race.team_names.length > 0) {
+    return race.team_names.join(" V ");
+  }
+
+  if (race.team1_name && race.team2_name) return `${race.team1_name} V ${race.team2_name}`;
+  return race.race_name || "Unknown race";
+}
+
 function buttonStyle(backgroundColor = "#1976d2") {
   return {
     border: "none",
@@ -52,8 +66,7 @@ export default function AdminEventsRaces() {
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [courseId, setCourseId] = useState("");
-  const [team1Id, setTeam1Id] = useState("");
-  const [team2Id, setTeam2Id] = useState("");
+  const [selectedTeamIds, setSelectedTeamIds] = useState([]);
   const [teams, setTeams] = useState([]);
   const [courses, setCourses] = useState([]);
   const [races, setRaces] = useState([]);
@@ -73,9 +86,7 @@ else if (!raceDate) createRaceError = "Select a race date";
 else if (!startTime) createRaceError = "Select a start time";
 else if (!endTime) createRaceError = "Select an end time";
 else if (!courseId) createRaceError = "Select a course";
-else if (!team1Id) createRaceError = "Select Team 1";
-else if (!team2Id) createRaceError = "Select Team 2";
-else if (team1Id === team2Id) createRaceError = "Teams must be different";
+else if (selectedTeamIds.length < 2) createRaceError = "Select at least two teams";
 else if (
   Number.isNaN(startMinutes) ||
   Number.isNaN(endMinutes) ||
@@ -110,7 +121,7 @@ const isFormValid = createRaceError === "";
     event.preventDefault();
     setMessage("");
 
-    if (!raceName || !raceDate || !team1Id || !team2Id || !courseId || !startTime || !endTime) {
+    if (!raceName || !raceDate || selectedTeamIds.length < 2 || !courseId || !startTime || !endTime) {
       setMessage("Fill in all race fields");
       return;
     }
@@ -125,11 +136,6 @@ const isFormValid = createRaceError === "";
     const year = raceDay.getFullYear();
     if (year !== 2026 || month < 2 || month > 5) {
       setMessage("Race date must be between February 1, 2026 and May 31, 2026");
-      return;
-    }
-
-    if (team1Id === team2Id) {
-      setMessage("Choose two different teams");
       return;
     }
 
@@ -155,8 +161,7 @@ const isFormValid = createRaceError === "";
       return;
     }
 
-    const newTeam1 = Number(team1Id);
-    const newTeam2 = Number(team2Id);
+    const newTeamIds = selectedTeamIds.map(Number);
     const newCourseId = Number(courseId);
 
     const conflict = races.some((race) => {
@@ -173,11 +178,8 @@ const isFormValid = createRaceError === "";
       }
 
       const timeOverlap = startMinutes < existingEnd && endMinutes > existingStart;
-      const teamConflict =
-        race.team1_id === newTeam1 ||
-        race.team2_id === newTeam1 ||
-        race.team1_id === newTeam2 ||
-        race.team2_id === newTeam2;
+      const raceTeamIds = getRaceTeamIds(race);
+      const teamConflict = raceTeamIds.some((teamId) => newTeamIds.includes(teamId));
       const courseConflict = race.course_id === newCourseId;
 
       return timeOverlap && (teamConflict || courseConflict);
@@ -191,15 +193,8 @@ const isFormValid = createRaceError === "";
         const existingEnd = timeStringToMinutes(race.end_time);
         const timeOverlap = startMinutes < existingEnd && endMinutes > existingStart;
 
-        return (
-          timeOverlap &&
-          (
-            race.team1_id === newTeam1 ||
-            race.team2_id === newTeam1 ||
-            race.team1_id === newTeam2 ||
-            race.team2_id === newTeam2
-          )
-        );
+        const raceTeamIds = getRaceTeamIds(race);
+        return timeOverlap && raceTeamIds.some((teamId) => newTeamIds.includes(teamId));
       });
 
       setMessage(
@@ -219,8 +214,7 @@ const isFormValid = createRaceError === "";
         start_time: startTime,
         end_time: endTime,
         course_id: newCourseId,
-        team1_id: newTeam1,
-        team2_id: newTeam2,
+        team_ids: newTeamIds,
       }),
     });
 
@@ -236,8 +230,7 @@ const isFormValid = createRaceError === "";
     setStartTime("");
     setEndTime("");
     setCourseId("");
-    setTeam1Id("");
-    setTeam2Id("");
+    setSelectedTeamIds([]);
     setMessage(data.message || "Race created");
     await loadData();
   }
@@ -270,6 +263,15 @@ const isFormValid = createRaceError === "";
       ...current,
       [userId]: value,
     }));
+  }
+
+  function handleTeamToggle(teamId) {
+    const numericTeamId = Number(teamId);
+    setSelectedTeamIds((current) =>
+      current.includes(numericTeamId)
+        ? current.filter((id) => id !== numericTeamId)
+        : [...current, numericTeamId]
+    );
   }
 
   async function handleSaveResults(event) {
@@ -468,45 +470,30 @@ const isFormValid = createRaceError === "";
             ))}
           </select>
 
-          <select
-            required
-            value={team1Id}
-            onChange={(e) => setTeam1Id(e.target.value)}
+          <div
             style={{
               width: "100%",
               padding: "14px 12px",
               borderRadius: "10px",
               border: "1px solid #ccc",
               fontSize: "16px",
+              backgroundColor: "white",
+              textAlign: "left",
             }}
           >
-            <option value="">Team 1</option>
+            <p style={{ margin: "0 0 10px", fontWeight: 700 }}>Teams</p>
             {teams.map((team) => (
-              <option key={team.team_id} value={team.team_id}>
+              <label key={team.team_id} style={{ display: "block", marginBottom: "8px" }}>
+                <input
+                  type="checkbox"
+                  checked={selectedTeamIds.includes(Number(team.team_id))}
+                  onChange={() => handleTeamToggle(team.team_id)}
+                  style={{ marginRight: "8px" }}
+                />
                 {team.team_name}
-              </option>
+              </label>
             ))}
-          </select>
-
-          <select
-            required
-            value={team2Id}
-            onChange={(e) => setTeam2Id(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "14px 12px",
-              borderRadius: "10px",
-              border: "1px solid #ccc",
-              fontSize: "16px",
-            }}
-          >
-            <option value="">Team 2</option>
-            {teams.map((team) => (
-              <option key={team.team_id} value={team.team_id}>
-                {team.team_name}
-              </option>
-            ))}
-          </select>
+          </div>
 
           <div
             title={!isFormValid ? createRaceError : ""}
@@ -557,10 +544,7 @@ const isFormValid = createRaceError === "";
                 const end = formatTime(race.end_time);
                 const formattedDate = formatDateWithDot(race.race_date);
                 const course = race.course_name || "Unknown course";
-                const raceTitle =
-                  race.team1_name && race.team2_name
-                    ? `${race.team1_name} V ${race.team2_name}`
-                    : race.race_name || "Unknown race";
+                const raceTitle = getRaceTitle(race);
 
                 return (
                   <tr key={race.race_id}>
@@ -616,26 +600,16 @@ const isFormValid = createRaceError === "";
           <div style={{ marginTop: "30px", textAlign: "left" }}>
             <h2 style={{ marginBottom: "8px" }}>Enter Results</h2>
             <p style={{ marginTop: 0, color: "#555" }}>
-              {resultsRaceData.race.race_name}: {resultsRaceData.race.team1_name} vs{" "}
-              {resultsRaceData.race.team2_name}
+              {resultsRaceData.race.race_name}: {getRaceTitle(resultsRaceData.race)}
               {resultsRaceData.race.status ? ` (${resultsRaceData.race.status})` : ""}
             </p>
 
             <form onSubmit={handleSaveResults}>
-              {[
-                {
-                  teamId: resultsRaceData.race.team1_id,
-                  teamName: resultsRaceData.race.team1_name,
-                },
-                {
-                  teamId: resultsRaceData.race.team2_id,
-                  teamName: resultsRaceData.race.team2_name,
-                },
-              ].map((team) => (
-                <div key={team.teamId} style={{ marginBottom: "20px" }}>
-                  <h3>{team.teamName}</h3>
+              {resultsRaceData.race.team_ids.map((teamId, index) => (
+                <div key={teamId} style={{ marginBottom: "20px" }}>
+                  <h3>{resultsRaceData.race.team_names[index]}</h3>
                   {resultsRaceData.skiers
-                    .filter((skier) => skier.team_id === team.teamId)
+                    .filter((skier) => Number(skier.team_id) === Number(teamId))
                     .map((skier) => (
                       <div key={skier.user_id} style={{ marginBottom: "10px" }}>
                         <label htmlFor={`result-${skier.user_id}`}>

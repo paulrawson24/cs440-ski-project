@@ -40,14 +40,20 @@ CREATE TABLE races (
     start_time TIME NOT NULL,
     end_time TIME NOT NULL,
     course_id INT NOT NULL,
-    team1_id INT NOT NULL,
-    team2_id INT NOT NULL,
     status ENUM('scheduled', 'canceled') NOT NULL DEFAULT 'scheduled',
     FOREIGN KEY (course_id) REFERENCES courses(course_id)
+        ON DELETE CASCADE
+);
+
+-- RACE TEAMS
+CREATE TABLE race_teams (
+    race_id INT NOT NULL,
+    team_id INT NOT NULL,
+    position INT NOT NULL,
+    PRIMARY KEY (race_id, team_id),
+    FOREIGN KEY (race_id) REFERENCES races(race_id)
         ON DELETE CASCADE,
-    FOREIGN KEY (team1_id) REFERENCES teams(team_id)
-        ON DELETE CASCADE,
-    FOREIGN KEY (team2_id) REFERENCES teams(team_id)
+    FOREIGN KEY (team_id) REFERENCES teams(team_id)
         ON DELETE CASCADE
 );
 

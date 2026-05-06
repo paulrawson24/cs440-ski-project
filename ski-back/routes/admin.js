@@ -13,6 +13,39 @@ function getRaceResult(teamTime, opponentTime) {
   return "tie";
 }
 
+function normalizeTeamIds(body) {
+  const rawIds = Array.isArray(body.team_ids)
+    ? body.team_ids
+    : [body.team1_id, body.team2_id];
+
+  return [...new Set(rawIds.map(Number).filter((id) => Number.isInteger(id) && id > 0))];
+}
+
+function placeholders(values) {
+  return values.map(() => "?").join(", ");
+}
+
+function hydrateRaceTeams(row) {
+  const teamIds = row.team_ids_csv
+    ? row.team_ids_csv.split(",").map(Number)
+    : [];
+  const teamNames = row.team_names_csv
+    ? row.team_names_csv.split("||")
+    : [];
+
+  return {
+    ...row,
+    team_ids: teamIds,
+    team_names: teamNames,
+    team1_id: teamIds[0] ?? null,
+    team2_id: teamIds[1] ?? null,
+    team1_name: teamNames[0] ?? null,
+    team2_name: teamNames[1] ?? null,
+    team_ids_csv: undefined,
+    team_names_csv: undefined,
+  };
+}
+
 router.get("/", (req, res) => {
   res.json({ ok: true, area: "admin" });
 });
@@ -43,8 +76,8 @@ router.get("/teams", async (req, res) => {
               ) AS member_count,
               (
                 SELECT COUNT(*)
-                FROM races r
-                WHERE r.team1_id = t.team_id OR r.team2_id = t.team_id
+                FROM race_teams rt
+                WHERE rt.team_id = t.team_id
               ) AS race_count
        FROM teams t
        LEFT JOIN users u ON u.user_id = t.coach_id
@@ -90,8 +123,10 @@ router.get("/courses", async (req, res) => {
 
 // POST /api/admin/races - Create a new race with conflict validation
 router.post("/races", async (req, res) => {
-  const { race_name, race_date, start_time, end_time, course_id, team1_id, team2_id } = req.body;
-  if (!race_name || !race_date || !start_time || !end_time || !course_id || !team1_id || !team2_id) {
+  const { race_name, race_date, start_time, end_time, course_id } = req.body;
+  const teamIds = normalizeTeamIds(req.body);
+
+  if (!race_name || !race_date || !start_time || !end_time || !course_id || teamIds.length < 2) {
     return res.status(400).json({ ok: false, error: "Missing race fields" });
   }
 
@@ -110,10 +145,6 @@ router.post("/races", async (req, res) => {
       return res.status(400).json({ ok: false, error: "Race date must be between February 1, 2026 and May 31, 2026" });
     }
 
-    if (Number(team1_id) === Number(team2_id)) {
-      return res.status(400).json({ ok: false, error: "Choose two different teams" });
-    }
-
     if (raceStart >= raceEnd) {
       return res.status(400).json({ ok: false, error: "Race end time must be after the start time" });
     }
@@ -124,12 +155,14 @@ router.post("/races", async (req, res) => {
 
     // Check if either team already has a race scheduled at the same time/date
     const [teamConflicts] = await pool.query(
-      `SELECT race_id FROM races 
-       WHERE race_date = ? 
-       AND status <> 'canceled'
-       AND ((team1_id = ? OR team2_id = ?) OR (team1_id = ? OR team2_id = ?))
-       AND NOT (end_time <= ? OR start_time >= ?)`,
-      [race_date, team1_id, team1_id, team2_id, team2_id, start_time, end_time]
+      `SELECT DISTINCT r.race_id
+       FROM races r
+       JOIN race_teams rt ON rt.race_id = r.race_id
+       WHERE r.race_date = ?
+         AND r.status <> 'canceled'
+         AND rt.team_id IN (${placeholders(teamIds)})
+         AND NOT (r.end_time <= ? OR r.start_time >= ?)`,
+      [race_date, ...teamIds, start_time, end_time]
     );
 
     if (teamConflicts.length > 0) {
@@ -138,7 +171,7 @@ router.post("/races", async (req, res) => {
 
     // Check if the course already has a race scheduled at the same time/date
     const [courseConflicts] = await pool.query(
-      `SELECT race_id FROM races 
+      `SELECT race_id FROM races
        WHERE course_id = ? 
        AND race_date = ? 
        AND status <> 'canceled'
@@ -150,12 +183,29 @@ router.post("/races", async (req, res) => {
       return res.status(400).json({ ok: false, error: "That course already has a race scheduled during that time" });
     }
 
-    const [result] = await pool.query(
-      `INSERT INTO races (race_name, race_date, start_time, end_time, course_id, team1_id, team2_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [race_name, race_date, start_time, end_time, course_id, team1_id, team2_id]
-    );
-    return res.status(201).json({ ok: true, race_id: result.insertId });
+    const connection = await pool.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [result] = await connection.query(
+        `INSERT INTO races (race_name, race_date, start_time, end_time, course_id)
+         VALUES (?, ?, ?, ?, ?)`,
+        [race_name, race_date, start_time, end_time, course_id]
+      );
+
+      const raceId = result.insertId;
+      const raceTeamValues = teamIds.map((teamId, index) => [raceId, teamId, index + 1]);
+      await connection.query(
+        "INSERT INTO race_teams (race_id, team_id, position) VALUES ?",
+        [raceTeamValues]
+      );
+      await connection.commit();
+      return res.status(201).json({ ok: true, race_id: raceId });
+    } catch (err) {
+      await connection.rollback();
+      throw err;
+    } finally {
+      connection.release();
+    }
   } catch (err) {
     return res.status(500).json({ ok: false, error: "Could not create race" });
   }
@@ -165,15 +215,18 @@ router.get("/races", async (req, res) => {
   try {
     const [rows] = await pool.query(
       `SELECT r.race_id, r.race_name, r.race_date, r.start_time, r.end_time,
-              r.course_id, r.status, c.course_name, r.team1_id, t1.team_name AS team1_name,
-              r.team2_id, t2.team_name AS team2_name
+              r.course_id, r.status, c.course_name,
+              GROUP_CONCAT(t.team_id ORDER BY rt.position) AS team_ids_csv,
+              GROUP_CONCAT(t.team_name ORDER BY rt.position SEPARATOR '||') AS team_names_csv
        FROM races r
        JOIN courses c ON c.course_id = r.course_id
-       JOIN teams t1 ON t1.team_id = r.team1_id
-       JOIN teams t2 ON t2.team_id = r.team2_id
+       JOIN race_teams rt ON rt.race_id = r.race_id
+       JOIN teams t ON t.team_id = rt.team_id
+       GROUP BY r.race_id, r.race_name, r.race_date, r.start_time, r.end_time,
+                r.course_id, r.status, c.course_name
        ORDER BY r.race_date, r.start_time`
     );
-    return res.json(rows);
+    return res.json(rows.map(hydrateRaceTeams));
   } catch (err) {
     return res.status(500).json({ ok: false, error: "Could not fetch races" });
   }
@@ -187,12 +240,14 @@ router.get("/races/:raceId/results", async (req, res) => {
 
   try {
     const [[race]] = await pool.query(
-      `SELECT r.race_id, r.race_name, r.team1_id, r.team2_id, r.status,
-              t1.team_name AS team1_name, t2.team_name AS team2_name
+      `SELECT r.race_id, r.race_name, r.status,
+              GROUP_CONCAT(t.team_id ORDER BY rt.position) AS team_ids_csv,
+              GROUP_CONCAT(t.team_name ORDER BY rt.position SEPARATOR '||') AS team_names_csv
        FROM races r
-       JOIN teams t1 ON t1.team_id = r.team1_id
-       JOIN teams t2 ON t2.team_id = r.team2_id
-       WHERE r.race_id = ?`,
+       JOIN race_teams rt ON rt.race_id = r.race_id
+       JOIN teams t ON t.team_id = rt.team_id
+       WHERE r.race_id = ?
+       GROUP BY r.race_id, r.race_name, r.status`,
       [raceId]
     );
 
@@ -200,18 +255,19 @@ router.get("/races/:raceId/results", async (req, res) => {
       return res.status(404).json({ ok: false, error: "Race not found" });
     }
 
+    const hydratedRace = hydrateRaceTeams(race);
     const [skiers] = await pool.query(
       `SELECT u.user_id, u.first_name, u.last_name, u.team_id, rr.time_seconds
        FROM users u
        LEFT JOIN race_results rr
          ON rr.user_id = u.user_id AND rr.race_id = ?
        WHERE u.role = 'skier'
-         AND (u.team_id = ? OR u.team_id = ?)
+         AND u.team_id IN (${placeholders(hydratedRace.team_ids)})
        ORDER BY u.team_id, u.last_name, u.first_name`,
-      [raceId, race.team1_id, race.team2_id]
+      [raceId, ...hydratedRace.team_ids]
     );
 
-    return res.json({ ok: true, race, skiers });
+    return res.json({ ok: true, race: hydratedRace, skiers });
   } catch (err) {
     return res.status(500).json({ ok: false, error: "Could not load race results" });
   }
@@ -285,9 +341,12 @@ router.post("/races/:raceId/results", async (req, res) => {
 
   try {
     const [[race]] = await pool.query(
-      `SELECT race_id, team1_id, team2_id
-       FROM races
-       WHERE race_id = ?`,
+      `SELECT r.race_id,
+              GROUP_CONCAT(rt.team_id ORDER BY rt.position) AS team_ids_csv
+       FROM races r
+       JOIN race_teams rt ON rt.race_id = r.race_id
+       WHERE r.race_id = ?
+       GROUP BY r.race_id`,
       [raceId]
     );
 
@@ -295,12 +354,13 @@ router.post("/races/:raceId/results", async (req, res) => {
       return res.status(404).json({ ok: false, error: "Race not found" });
     }
 
+    const teamIds = race.team_ids_csv.split(",").map(Number);
     const [allowedSkiers] = await pool.query(
       `SELECT user_id
        FROM users
        WHERE role = 'skier'
-         AND (team_id = ? OR team_id = ?)`,
-      [race.team1_id, race.team2_id]
+         AND team_id IN (${placeholders(teamIds)})`,
+      teamIds
     );
 
     const allowedIds = new Set(allowedSkiers.map((row) => row.user_id));
@@ -336,35 +396,40 @@ router.post("/races/:raceId/results", async (req, res) => {
 router.get("/reports/team-stats", async (_req, res) => {
   try {
     const completedRaceSubquery = `
-      SELECT r2.race_id
-      FROM races r2
-      JOIN race_results rr2 ON rr2.race_id = r2.race_id
-      JOIN users u2 ON u2.user_id = rr2.user_id
-      WHERE r2.status <> 'canceled'
-      GROUP BY r2.race_id, r2.team1_id, r2.team2_id
-      HAVING COUNT(CASE WHEN u2.team_id = r2.team1_id THEN 1 END) = 2
-         AND COUNT(CASE WHEN u2.team_id = r2.team2_id THEN 1 END) = 2
+      SELECT completed.race_id
+      FROM (
+        SELECT rt.race_id, rt.team_id, COUNT(rr.user_id) AS result_count
+        FROM race_teams rt
+        JOIN races r ON r.race_id = rt.race_id
+        LEFT JOIN users u ON u.team_id = rt.team_id AND u.role = 'skier'
+        LEFT JOIN race_results rr ON rr.race_id = rt.race_id AND rr.user_id = u.user_id
+        WHERE r.status <> 'canceled'
+        GROUP BY rt.race_id, rt.team_id
+        HAVING result_count = 2
+      ) completed
+      GROUP BY completed.race_id
+      HAVING COUNT(*) = (
+        SELECT COUNT(*)
+        FROM race_teams rt_count
+        WHERE rt_count.race_id = completed.race_id
+      )
     `;
 
     const [rows] = await pool.query(
       `SELECT r.race_id, r.race_name, r.race_date, c.course_name,
-              r.team1_id, t1.team_name AS team1_name,
-              r.team2_id, t2.team_name AS team2_name,
-              SUM(CASE WHEN u.team_id = r.team1_id THEN rr.time_seconds ELSE 0 END) AS team1_time,
-              SUM(CASE WHEN u.team_id = r.team2_id THEN rr.time_seconds ELSE 0 END) AS team2_time,
-              COUNT(CASE WHEN u.team_id = r.team1_id THEN 1 END) AS team1_count,
-              COUNT(CASE WHEN u.team_id = r.team2_id THEN 1 END) AS team2_count
+              rt.team_id, t.team_name, SUM(rr.time_seconds) AS team_time,
+              COUNT(rr.user_id) AS result_count, MIN(rt.position) AS participant_position
        FROM races r
        JOIN courses c ON c.course_id = r.course_id
-       JOIN teams t1 ON t1.team_id = r.team1_id
-       JOIN teams t2 ON t2.team_id = r.team2_id
+       JOIN race_teams rt ON rt.race_id = r.race_id
+       JOIN teams t ON t.team_id = rt.team_id
        JOIN race_results rr ON rr.race_id = r.race_id
-       JOIN users u ON u.user_id = rr.user_id
+       JOIN users u ON u.user_id = rr.user_id AND u.team_id = rt.team_id
        WHERE r.status <> 'canceled'
+         AND r.race_id IN (${completedRaceSubquery})
        GROUP BY r.race_id, r.race_name, r.race_date, c.course_name,
-                r.team1_id, t1.team_name, r.team2_id, t2.team_name
-       HAVING team1_count = 2 AND team2_count = 2
-       ORDER BY r.race_date, r.race_id`
+                rt.team_id, t.team_name
+       ORDER BY r.race_date, r.race_id, participant_position`
     );
 
     const [teamRows] = await pool.query(
@@ -452,49 +517,44 @@ router.get("/reports/team-stats", async (_req, res) => {
       }
     }
 
+    const raceMap = new Map();
     for (const row of rows) {
-      const team1Time = Number(row.team1_time);
-      const team2Time = Number(row.team2_time);
-      const team1Result = getRaceResult(team1Time, team2Time);
-      const team2Result = getRaceResult(team2Time, team1Time);
+      if (!raceMap.has(row.race_id)) raceMap.set(row.race_id, []);
+      raceMap.get(row.race_id).push(row);
+    }
 
-      const team1 = ensureTeam(Number(row.team1_id), row.team1_name);
-      const team2 = ensureTeam(Number(row.team2_id), row.team2_name);
+    for (const raceTeams of raceMap.values()) {
+      const bestTime = Math.min(...raceTeams.map((row) => Number(row.team_time)));
 
-      team1.races.push({
-        race_id: row.race_id,
-        race_name: row.race_name,
-        race_date: row.race_date,
-        course_name: row.course_name,
-        opponent_name: row.team2_name,
-        team_time: team1Time,
-        opponent_time: team2Time,
-        result: team1Result,
-      });
+      for (const row of raceTeams) {
+        const teamTime = Number(row.team_time);
+        const result = teamTime === bestTime
+          ? raceTeams.filter((other) => Number(other.team_time) === bestTime).length > 1 ? "tie" : "win"
+          : "loss";
+        const team = ensureTeam(Number(row.team_id), row.team_name);
+        const opponents = raceTeams
+          .filter((other) => Number(other.team_id) !== Number(row.team_id))
+          .map((other) => other.team_name)
+          .join(", ");
 
-      team2.races.push({
-        race_id: row.race_id,
-        race_name: row.race_name,
-        race_date: row.race_date,
-        course_name: row.course_name,
-        opponent_name: row.team1_name,
-        team_time: team2Time,
-        opponent_time: team1Time,
-        result: team2Result,
-      });
+        team.races.push({
+          race_id: row.race_id,
+          race_name: row.race_name,
+          race_date: row.race_date,
+          course_name: row.course_name,
+          opponent_name: opponents,
+          team_time: teamTime,
+          opponent_time: bestTime,
+          result,
+        });
 
-      team1.completed_races += 1;
-      team2.completed_races += 1;
-      team1.team_time_total += team1Time;
-      team2.team_time_total += team2Time;
+        team.completed_races += 1;
+        team.team_time_total += teamTime;
 
-      if (team1Result === "win") team1.wins += 1;
-      else if (team1Result === "loss") team1.losses += 1;
-      else team1.ties += 1;
-
-      if (team2Result === "win") team2.wins += 1;
-      else if (team2Result === "loss") team2.losses += 1;
-      else team2.ties += 1;
+        if (result === "win") team.wins += 1;
+        else if (result === "loss") team.losses += 1;
+        else team.ties += 1;
+      }
     }
 
     const teams = Array.from(teamMap.values())
@@ -542,18 +602,26 @@ router.get("/reports/skier-stats", async (_req, res) => {
        JOIN races r ON r.race_id = rr.race_id
        WHERE u.role = 'skier'
          AND r.race_id IN (
-           SELECT completed.race_id
+           SELECT complete_races.race_id
            FROM (
-             SELECT r2.race_id,
-                    COUNT(CASE WHEN u2.team_id = r2.team1_id THEN 1 END) AS team1_count,
-                    COUNT(CASE WHEN u2.team_id = r2.team2_id THEN 1 END) AS team2_count
-             FROM races r2
-             JOIN race_results rr2 ON rr2.race_id = r2.race_id
-             JOIN users u2 ON u2.user_id = rr2.user_id
-             WHERE r2.status <> 'canceled'
-             GROUP BY r2.race_id, r2.team1_id, r2.team2_id
-             HAVING team1_count = 2 AND team2_count = 2
-           ) AS completed
+             SELECT completed.race_id
+             FROM (
+               SELECT rt.race_id, rt.team_id, COUNT(rr2.user_id) AS result_count
+               FROM race_teams rt
+               JOIN races r2 ON r2.race_id = rt.race_id
+               LEFT JOIN users u2 ON u2.team_id = rt.team_id AND u2.role = 'skier'
+               LEFT JOIN race_results rr2 ON rr2.race_id = rt.race_id AND rr2.user_id = u2.user_id
+               WHERE r2.status <> 'canceled'
+               GROUP BY rt.race_id, rt.team_id
+               HAVING result_count = 2
+             ) AS completed
+             GROUP BY completed.race_id
+             HAVING COUNT(*) = (
+               SELECT COUNT(*)
+               FROM race_teams rt_count
+               WHERE rt_count.race_id = completed.race_id
+             )
+           ) AS complete_races
          )
        GROUP BY u.user_id, u.first_name, u.last_name, u.team_id, t.team_name
        ORDER BY average_time ASC, total_time ASC, u.last_name ASC, u.first_name ASC`
@@ -815,8 +883,8 @@ router.delete("/teams/:teamId", async (req, res) => {
               ) AS member_count,
               (
                 SELECT COUNT(*)
-                FROM races r
-                WHERE r.team1_id = t.team_id OR r.team2_id = t.team_id
+                FROM race_teams rt
+                WHERE rt.team_id = t.team_id
               ) AS race_count
        FROM teams t
        WHERE t.team_id = ?`,

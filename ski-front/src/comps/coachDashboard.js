@@ -20,6 +20,22 @@ function formatDateWithDot(dateStr) {
   return `${month}. ${day}, ${year}`;
 }
 
+function raceIncludesTeam(race, teamId) {
+  const teamIds = Array.isArray(race.team_ids)
+    ? race.team_ids
+    : [race.team1_id, race.team2_id];
+  return teamIds.map(Number).includes(Number(teamId));
+}
+
+function getRaceTitle(race) {
+  if (Array.isArray(race.team_names) && race.team_names.length > 0) {
+    return race.team_names.join(" V ");
+  }
+
+  if (race.team1_name && race.team2_name) return `${race.team1_name} V ${race.team2_name}`;
+  return `${race.team1_id || "Team 1"} V ${race.team2_id || "Team 2"}`;
+}
+
 export default function CoachDashboard() {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
@@ -72,8 +88,7 @@ export default function CoachDashboard() {
             );
 
             const teamRaces = racesData.filter(
-              (race) =>
-                Number(race.team1_id) === coachTeamId || Number(race.team2_id) === coachTeamId,
+              (race) => raceIncludesTeam(race, coachTeamId),
             );
             setRaces(teamRaces.filter((race) => race.status !== "canceled"));
             setCanceledRaces(teamRaces.filter((race) => race.status === "canceled"));
@@ -182,10 +197,7 @@ export default function CoachDashboard() {
                 const end = formatTime(race.end_time);
                 const formattedDate = formatDateWithDot(race.race_date);
                 const course = race.course_name || "Unknown course";
-                const raceTitle =
-                  race.team1_name && race.team2_name
-                    ? `${race.team1_name} V ${race.team2_name}`
-                    : `${race.team1_id || "Team 1"} V ${race.team2_id || "Team 2"}`;
+                const raceTitle = getRaceTitle(race);
 
                 return (
                   <li key={race.race_id} style={{ marginBottom: "12px" }}>
@@ -212,10 +224,7 @@ export default function CoachDashboard() {
                 const end = formatTime(race.end_time);
                 const formattedDate = formatDateWithDot(race.race_date);
                 const course = race.course_name || "Unknown course";
-                const raceTitle =
-                  race.team1_name && race.team2_name
-                    ? `${race.team1_name} V ${race.team2_name}`
-                    : `${race.team1_id || "Team 1"} V ${race.team2_id || "Team 2"}`;
+                const raceTitle = getRaceTitle(race);
 
                 return (
                   <li key={race.race_id} style={{ marginBottom: "12px" }}>

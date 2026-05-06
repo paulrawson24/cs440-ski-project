@@ -71,6 +71,14 @@ export default function ButtonAppBar() {
             </MenuItem>
             <MenuItem
               onClick={() => {
+                handleMenuClose();
+                window.open("/Ski-League-User-Manual.pdf", "_blank");
+              }}
+            >
+              User Manual
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
                 handleNavigate("/login");
                 if (localStorage.getItem("user")) {
                   localStorage.removeItem("user");

@@ -1,5 +1,6 @@
 // Authentication routes for user login
 const express = require("express");
+const bcrypt = require("bcrypt");
 const router = express.Router();
 const pool = require("../db");
 
@@ -15,17 +16,23 @@ router.post("/login", async (req, res) => {
   try {
     // Query database for user with matching email and password
     const [rows] = await pool.query(
-      "SELECT user_id, first_name, last_name, email, role, team_id FROM users WHERE email = ? AND password = ? LIMIT 1",
-      [email, password]
+      "SELECT user_id, first_name, last_name, email, role, team_id, password_hash FROM users WHERE email = ? LIMIT 1",
+      [email]
     );
 
-    // Check if user was found
-    if (!rows.length) {
+    const user = rows[0];
+
+    if (!user) {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    // Return user data (excluding password for security)
-    return res.json(rows[0]);
+    const ok = await bcrypt.compare(password, user.password_hash);
+    if (!ok) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+  const { password_hash, ...safeUser } = user;
+    return res.json(safeUser);
   } catch (err) {
     return res.status(500).json({ error: "Login failed" });
   }
